@@ -1,0 +1,935 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DepDev DMS Prototype</title>
+  <link rel="stylesheet" href="./styles.css" />
+<style>
+  
+  *:focus {
+    outline: 2px solid var(--navy);
+    outline-offset: 2px;
+  }
+
+  *:focus:not(:focus-visible) {
+    outline: none;
+  }
+</style>
+
+</head>
+<body>
+
+<!-- ===== SIGN IN SCREEN ===== -->
+<div class="screen active" id="screen-signin">
+  <div class="auth-page">
+    <div class="auth-bg"></div>
+    <div class="auth-overlay"></div>
+    <div class="auth-content">
+      <!-- Left branding -->
+      <div class="auth-branding">
+        <div class="auth-branding-top">DEPDEV CENTRAL VISAYAS</div>
+        <h1 class="auth-branding-title">DepDev Document Management System</h1>
+        <div class="auth-branding-line"></div>
+        <p class="auth-branding-text">
+          Centralized Document Management System for the Office of the Regional Director
+        </p>
+        <div class="auth-feature-list">
+          <div class="auth-feature-item">
+            <div class="auth-feature-dot"></div>
+            Document Lifecycle Tracking
+          </div>
+          <div class="auth-feature-item">
+            <div class="auth-feature-dot"></div>
+            Role-Based Access Control
+          </div>
+          <div class="auth-feature-item">
+            <div class="auth-feature-dot"></div>
+            Automated Reference Codes
+          </div>
+          <div class="auth-feature-item">
+            <div class="auth-feature-dot"></div>
+            Confidential Document Handling
+          </div>
+        </div>
+      </div>
+      
+      <!-- Right form area -->
+      <div class="auth-form-wrap">
+        <div class="auth-card">
+          <div class="auth-logo-wrap">
+            <img src="logo.png" alt="Logo" class="auth-logo" />
+          </div>
+          <h2 class="auth-title">Welcome back</h2>
+          <p class="auth-subtitle">Sign in to your account</p>
+          
+          <form class="auth-form">
+            <div>
+              <label class="auth-label">Email address</label>
+              <div class="auth-input-wrap">
+                <input
+                  type="email"
+                  class="auth-input with-left-icon"
+                  placeholder="you@gmail.com"
+                  id="login-email"
+                  value="admin@depdev7.gov.ph"
+                />
+                <span class="auth-icon-left">📧</span>
+              </div>
+            </div>
+            
+            <div>
+              <label class="auth-label">Password</label>
+              <div class="auth-input-wrap">
+                <input
+                  type="password"
+                  class="auth-input with-left-icon with-right-icon"
+                  placeholder="⬢⬢⬢⬢⬢⬢⬢⬢"
+                  id="login-pass"
+                  value="password"
+                />
+                <span class="auth-icon-left">🔒</span>
+                <button
+                  type="button"
+                  class="auth-icon-btn"
+                  id="login-pass-toggle"
+                  onclick="togglePasswordVisibility('login-pass', 'login-pass-toggle')"
+                  title="Show/Hide password"
+                >👁️</button>
+              </div>
+            </div>
+            
+            <div class="auth-row-end">
+              <button type="button" class="auth-text-btn">Forgot password?</button>
+            </div>
+            
+            <button type="button" class="auth-submit" onclick="doLogin()">Sign In</button>
+          </form>
+          
+          <div class="auth-footer">
+            No account yet?
+            <button class="auth-link" onclick="showScreen('screen-signup')">Create one</button>
+          </div>
+          
+          <div class="auth-demo">
+            <p class="auth-demo-text">Quick demo - sign in as:</p>
+            <div class="auth-demo-buttons">
+              <button class="auth-demo-btn" onclick="loginAs('admin')">Admin (Harry)</button>
+              <button class="auth-demo-btn" onclick="loginAs('rd')">RD</button>
+              <button class="auth-demo-btn" onclick="loginAs('ard')">ARD</button>
+              <button class="auth-demo-btn" onclick="loginAs('dc')">Division Chief</button>
+              <button class="auth-demo-btn" onclick="loginAs('staff')">Staff</button>
+              <button class="auth-demo-btn" onclick="loginAs('supervisor')">Supervisor</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== SIGN UP SCREEN ===== -->
+<div class="screen" id="screen-signup">
+  <div class="auth-page">
+    <div class="auth-bg"></div>
+    <div class="auth-overlay"></div>
+    <div class="auth-content">
+      <!-- Left branding -->
+      <div class="auth-branding">
+        <div class="auth-branding-top">DEPDEV CENTRAL VISAYAS</div>
+        <h1 class="auth-branding-title">Create Account</h1>
+        <div class="auth-branding-line"></div>
+        <p class="auth-branding-text">
+          Register to access the Document Management System. Your account will be verified by the system administrator before activation.
+        </p>
+      </div>
+      
+      <!-- Right form area -->
+      <div class="auth-form-wrap">
+        <div class="auth-card">
+          <div class="auth-logo-wrap">
+            <img src="logo.png" alt="Logo" class="auth-logo" />
+          </div>
+          <h2 class="auth-title">Create Account</h2>
+          <p class="auth-subtitle">Fill in your details to register</p>
+          
+          <form class="auth-form">
+            <div class="auth-grid-2">
+              <div>
+                <label class="auth-label">First Name</label>
+                <div class="auth-input-wrap">
+                  <input
+                    type="text"
+                    class="auth-input with-left-icon"
+                    placeholder="Juan"
+                    id="signup-first-name"
+                  />
+                  <span class="auth-icon-left">👤</span>
+                </div>
+              </div>
+              <div>
+                <label class="auth-label">Last Name</label>
+                <div class="auth-input-wrap">
+                  <input
+                    type="text"
+                    class="auth-input with-left-icon"
+                    placeholder="Dela Cruz"
+                    id="signup-last-name"
+                  />
+                  <span class="auth-icon-left">👤</span>
+                </div>
+              </div>
+            </div>
+            
+            <div>
+              <label class="auth-label">Gmail Account</label>
+              <div class="auth-input-wrap">
+                <input
+                  type="email"
+                  class="auth-input with-left-icon"
+                  placeholder="juan.delacruz@gmail.com"
+                  id="signup-email"
+                />
+                <span class="auth-icon-left">📧</span>
+              </div>
+            </div>
+            
+            <div class="auth-grid-2">
+              <div>
+                <label class="auth-label">Password</label>
+                <div class="auth-input-wrap">
+                  <input
+                    type="password"
+                    class="auth-input with-left-icon with-right-icon"
+                    placeholder="⬢⬢⬢⬢⬢⬢⬢"
+                    id="signup-password"
+                  />
+                  <span class="auth-icon-left">🔒</span>
+                  <button
+                    type="button"
+                    class="auth-icon-btn"
+                    id="signup-pass-toggle"
+                    onclick="togglePasswordVisibility('signup-password', 'signup-pass-toggle')"
+                    title="Show/Hide password"
+                  >👁️</button>
+                </div>
+              </div>
+              <div>
+                <label class="auth-label">Confirm Password</label>
+                <div class="auth-input-wrap">
+                  <input
+                    type="password"
+                    class="auth-input with-left-icon with-right-icon"
+                    placeholder="⬢⬢⬢⬢⬢⬢⬢"
+                    id="signup-confirm-password"
+                  />
+                  <span class="auth-icon-left">🔒</span>
+                  <button
+                    type="button"
+                    class="auth-icon-btn"
+                    id="signup-confirm-pass-toggle"
+                    onclick="togglePasswordVisibility('signup-confirm-password', 'signup-confirm-pass-toggle')"
+                    title="Show/Hide password"
+                  >👁️</button>
+                </div>
+              </div>
+            </div>
+            
+            <div>
+              <label class="auth-label">Role</label>
+              <div class="auth-input-wrap">
+                <select class="auth-select with-left-icon" id="role-select" onchange="onRoleChange(this.value)">
+                  <option value="">- Select role -</option>
+                  <option value="admin">Admin</option>
+                  <option value="ard">ARD</option>
+                  <option value="oic">OIC</option>
+                  <option value="rd">RD</option>
+                  <option value="dc">Division Chief</option>
+                  <option value="supervisor">Supervisor</option>
+                  <option value="staff">Staff</option>
+                </select>
+                <span class="auth-icon-left"></span>
+              </div>
+            </div>
+            
+            <div class="auth-division-box" id="div-select-box">
+              <p class="auth-division-title">Select your division</p>
+              <div class="auth-division-list">
+                <label class="auth-division-item">
+                  <input type="radio" name="div" value="med" /> Monitoring and Evaluation Division
+                </label>
+                <label class="auth-division-item">
+                  <input type="radio" name="div" value="pfp" /> Policy Formulation and Planning Division
+                </label>
+                <label class="auth-division-item">
+                  <input type="radio" name="div" value="pdip" /> Project Development, Investment Programming and Budget Division
+                </label>
+                <label class="auth-division-item">
+                  <input type="radio" name="div" value="drd" /> Development and Research Division
+                </label>
+                <label class="auth-division-item">
+                  <input type="radio" name="div" value="fad" /> Finance and Administrative Division
+                </label>
+              </div>
+            </div>
+            
+            <button type="button" class="auth-submit" onclick="doSignup()">Create Account</button>
+          </form>
+          
+          <div class="auth-footer">
+            Already have an account?
+            <button class="auth-link" onclick="showScreen('screen-signin')">Sign in</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== APP SCREEN ===== -->
+<div class="screen" id="screen-app">
+  <div class="app">
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+      <div class="sb-logo">
+        <div class="sb-logo-row">
+          <div class="sb-logo-badge">
+            <img
+              src="logobg.png"
+              alt="DMS Logo"
+              class="sb-logo-img"
+              onerror="this.style.display='none';this.nextElementSibling.style.display='flex';"
+            />
+            <span class="sb-logo-fallback">DMS</span>
+          </div>
+          <div class="sb-logo-name">Document Management System</div>
+        </div>
+      </div>
+      <div class="sb-user">
+        <div class="sb-avatar" id="sb-avatar">H</div>
+        <div>
+          <div class="sb-name" id="sb-name">Sir. Harry</div>
+          <div class="sb-role" id="sb-role">Administrator</div>
+        </div>
+      </div>
+      <div class="sb-nav" id="sb-nav">
+        <!-- injected by JS -->
+      </div>
+    </div>
+    <!-- Sidebar overlay for mobile -->
+    <div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleSidebar()"></div>
+    <!-- MAIN -->
+    <div class="main">
+      <div class="topbar">
+        <button class="hamburger-btn"  id="hamburger-btn" onclick="toggleSidebar()" aria-label="Notifications">
+          <span></span>
+          <span></span>
+          <span></span>
+        </button>
+        <div class="topbar-brand">
+          <img src="logo.png" alt="DMS Logo" class="topbar-logo" />
+        </div>
+        <div class="topbar-search">
+          <span style="font-size: 14px; color: var(--muted)">🔍</span>
+          <input
+            placeholder="Search documents..."
+            id="search-input"
+            oninput="doSearch(this.value)"
+          />
+        </div>
+        <div class="topbar-right">
+          <div class="icon-btn" onclick="toggleNotif()" aria-label="Notifications">
+            🔔
+            <div class="notif-dot"></div>
+          </div>
+          <div class="icon-btn" onclick="openAccountSettings()" title="Account Settings" aria-label="Account Settings">⚙️</div>
+          <div class="icon-btn" onclick="openCompose()" title="Compose Document" aria-label="Compose Document">✉️</div>
+          <div class="icon-btn" onclick="openUploadDialog()" title="Upload Document" aria-label="Upload Document">📤</div>
+          <div class="icon-btn ocr-btn" onclick="openOCRDialog()" title="OCR Scanner - Scan documents from printer/scanner" aria-label="OCR Scanner">📷</div>
+          <!-- NOTIF PANEL -->
+          <div class="notif-panel" id="notif-panel">
+            <div class="notif-head">
+              <span>Notifications</span
+              ><a onclick="closeNotif()">Mark all read</a>
+            </div>
+            <div class="notif-item">
+              <div class="notif-dot2"></div>
+              <div>
+                <div class="notif-text">
+                  Document <strong>2026-04-163</strong> is pending RD approval
+                </div>
+                <div class="notif-time">2 hours ago</div>
+              </div>
+            </div>
+            <div class="notif-item">
+              <div class="notif-dot2"></div>
+              <div>
+                <div class="notif-text">
+                  New document received from Finance Division
+                </div>
+                <div class="notif-time">3 hours ago</div>
+              </div>
+            </div>
+            <div class="notif-item">
+              <div class="notif-dot2"></div>
+              <div>
+                <div class="notif-text">
+                  ⚠️ Document 2026-04-118 deadline in 2 days
+                </div>
+                <div class="notif-time">5 hours ago</div>
+              </div>
+            </div>
+            <div class="notif-item">
+              <div class="notif-dot2 read"></div>
+              <div>
+                <div class="notif-text">
+                  Document 2026-03-200 approved by RD
+                </div>
+                <div class="notif-time">Yesterday</div>
+              </div>
+            </div>
+            <div class="notif-item">
+              <div class="notif-dot2 read"></div>
+              <div>
+                <div class="notif-text">
+                  New staff account registered - pending activation
+                </div>
+                <div class="notif-time">2 days ago</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="content" id="main-content">
+        <!-- injected by JS -->
+      </div>
+    </div>
+  </div>
+</div>
+
+<input
+  type="file"
+  id="local-upload-input"
+  style="display: none"
+  onchange="handleLocalUpload(this)"
+/>
+<input
+  type="file"
+  id="ocr-upload-input"
+  style="display: none"
+  accept="image/*,application/pdf"
+  onchange="handleOCRUpload(this)"
+/>
+
+<!-- COMPOSE MODAL -->
+<div class="modal-overlay" id="compose-modal">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>Send Document</h3>
+      <span class="modal-close" onclick="closeCompose()">✕</span>
+    </div>
+    <div class="modal-body">
+      <div class="compose-wrap">
+        <div class="compose-to">
+          <label>To:</label
+          ><input
+            id="compose-to"
+            list="compose-recipient-list"
+            placeholder="Recipient name, role, or email..."
+          />
+          <datalist id="compose-recipient-list"></datalist>
+        </div>
+        <div class="compose-to">
+          <label>CC:</label
+          ><input
+            id="compose-cc"
+            list="compose-recipient-list"
+            placeholder="Optional CC..."
+          />
+        </div>
+        <div class="compose-subj">
+          <input id="compose-subject" placeholder="Subject / Document title" />
+        </div>
+        <div class="field" style="margin-top: 0.5rem">
+          <label>Document Direction</label
+          ><select id="compose-kind">
+            <option value="outgoing">Outgoing</option>
+            <option value="incoming">Incoming</option>
+          </select>
+        </div>
+        <div class="field" style="margin-top: 0.5rem">
+          <label>Document Type</label
+          ><select id="compose-type">
+            <option value="Memorandum">Memorandum</option>
+            <option value="Letter">Letter</option>
+            <option value="Bill / Financial">Bill / Financial</option>
+            !--<option value="Report">Report</option>
+            <option value="Endorsement">Endorsement</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Remarks</label
+          ><textarea
+            id="compose-remarks"
+            class="compose-body"
+            style="
+              border: 1.5px solid var(--border);
+              border-radius: 8px;
+              padding: 0.6rem;
+              width: 100%;
+              min-height: 80px;
+              font-family: var(--font);
+              font-size: 14px;
+              outline: none;
+            "
+            placeholder="Add instructions or remarks..."
+          ></textarea>
+        </div>
+        <div class="field">
+          <label>Confidential?</label>
+          <div style="display: flex; gap: 1rem; margin-top: 0.3rem">
+            <label
+              style="
+                display: flex;
+                align-items: center;
+                gap: 0.4rem;
+                font-size: 13px;
+                font-weight: 400;
+                text-transform: none;
+                letter-spacing: 0;
+              "
+              ><input type="radio" name="conf" value="yes" style="width: auto" /> Yes</label
+            >
+            <label
+              style="
+                display: flex;
+                align-items: center;
+                gap: 0.4rem;
+                font-size: 13px;
+                font-weight: 400;
+                text-transform: none;
+                letter-spacing: 0;
+              "
+              ><input type="radio" name="conf" value="no" checked style="width: auto" />
+              No</label
+            >
+          </div>
+        </div>
+        <div class="field">
+          <label>Physical copy exists?</label>
+          <div style="display: flex; gap: 1rem; margin-top: 0.3rem">
+            <label
+              style="
+                display: flex;
+                align-items: center;
+                gap: 0.4rem;
+                font-size: 13px;
+                font-weight: 400;
+                text-transform: none;
+                letter-spacing: 0;
+              "
+              ><input type="radio" name="phys" value="yes" style="width: auto" /> Yes</label
+            >
+            <label
+              style="
+                display: flex;
+                align-items: center;
+                gap: 0.4rem;
+                font-size: 13px;
+                font-weight: 400;
+                text-transform: none;
+                letter-spacing: 0;
+              "
+              ><input type="radio" name="phys" value="no" checked style="width: auto" />
+              No</label
+            >
+          </div>
+        </div>
+        <div
+          class="attach-zone"
+          onclick="
+            alert('File picker would open here (PDF, DOCX, XLSX, images, etc.)')
+          "
+        >
+          📎 <strong>Attach files</strong> - click to browse or drag & drop<br />
+          <span style="font-size: 12px"
+            >Supports PDF, DOCX, XLSX, PNG, JPG and more</span
+          >
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-sec" onclick="closeCompose()" aria-label="Cancel">Cancel</button>
+      <button class="btn-send" onclick="sendDoc()" aria-label="Send Document">Send Document ↗</button>
+    </div>
+  </div>
+</div>
+
+<!-- MANUAL LOGBOOK MODAL -->
+<div class="modal-overlay" id="manual-logbook-modal">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>Manual Logbook Entry</h3>
+      <span class="modal-close" onclick="closeManualLogbook()">✕</span>
+    </div>
+    <div class="modal-body">
+      <div class="compose-wrap">
+        <div class="field">
+          <label>Reference No. (Auto-generated)</label>
+          <input id="manual-ref" readonly />
+        </div>
+        <div class="field">
+          <label>Direction</label>
+          <select id="manual-kind">
+            <option value="incoming">Incoming</option>
+            <option value="outgoing">Outgoing</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Date Received</label>
+          <input id="manual-date" type="date" />
+        </div>
+        <div class="field">
+          <label>Type</label>
+          <input id="manual-type" placeholder="e.g. Memorandum" />
+        </div>
+        <div class="field">
+          <label>From / Sender</label>
+          <input id="manual-from" placeholder="Sender" />
+        </div>
+        <div class="field">
+          <label>Subject</label>
+          <input id="manual-subject" placeholder="Document subject/title" />
+        </div>
+        <div class="field">
+          <label>Routed To</label>
+          <input id="manual-to" placeholder="Recipient / office" />
+        </div>
+        <div class="field">
+          <label>Status</label>
+          <select id="manual-status">
+            <option value="For ARD Clearance">For ARD Clearance</option>
+            <option value="For RD Approval">For RD Approval</option>
+            <option value="Approved">Approved</option>
+            <option value="Released">Released</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Physical Copy</label>
+          <select id="manual-physical">
+            <option value="yes">Yes</option>
+            <option value="no" selected>No</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-sec" onclick="closeManualLogbook()" aria-label="Cancel">Cancel</button>
+      <button class="btn-send" onclick="saveManualLogbook()" aria-label="Save Logbook Entry">Save Logbook Entry</button>
+    </div>
+  </div>
+</div>
+
+<!-- DOCUMENT EDITOR MODAL -->
+<div class="modal-overlay" id="editor-modal">
+  <div class="modal">
+    <div class="modal-head">
+      <h3 id="editor-title">Document Editor</h3>
+      <span class="modal-close" onclick="closeEditor()">✕</span>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label>Editing Tool / Software</label>
+        <select id="editor-tool">
+          <option value="Word">Word Editor</option>
+          <option value="Excel">Excel Editor</option>
+          <option value="PowerPoint">PowerPoint Editor</option>
+          <option value="General">General Rich Text Editor</option>
+        </select>
+      </div>
+      <div class="editor-meta" id="editor-meta"></div>
+      <textarea
+        id="editor-content"
+        class="editor-area"
+        placeholder="Edit document content here..."
+      ></textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-sec" onclick="closeEditor()" aria-label="Cancel">Cancel</button>
+      <button class="btn-send" onclick="saveEditor()" aria-label="Save Changes">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- UPLOAD ENCODING ALERT MODAL -->
+<div class="modal-overlay" id="upload-encode-modal">
+  <div class="modal" style="max-width: 480px">
+    <div class="modal-head">
+      <h3>Upload Complete</h3>
+      <span class="modal-close" onclick="closeUploadEncodeModal()" aria-label="Close">✕</span>
+    </div>
+    <div class="modal-body">
+      <div class="upload-alert-msg">
+        Do you want to automatically encode this uploaded document in the Document Logbook?
+        <span class="upload-alert-file" id="upload-file-name"></span>
+      </div>
+    </div>
+    <div class="modal-footer" style="justify-content: flex-end">
+      <button class="btn-sec" onclick="submitUploadEncodeChoice(false)" aria-label="No">No</button>
+      <button class="btn-send" onclick="submitUploadEncodeChoice(true)" aria-label="Yes">Yes</button>
+    </div>
+  </div>
+</div>
+
+<!-- OCR SCANNER MODAL -->
+<div class="modal-overlay" id="ocr-scanner-modal">
+  <div class="modal" style="max-width: 680px">
+    <div class="modal-head">
+      <h3>📷 OCR Scanner - Document Scanning System</h3>
+      <span class="modal-close" onclick="closeOCRScanner()" aria-label="Close">✕</span>
+    </div>
+    <div class="modal-body">
+      <div class="compose-wrap">
+        <!-- Scanner Detection Section -->
+        <div class="card" style="margin-bottom: 1rem; background: var(--pill); border: 1px solid var(--border);">
+          <div class="card-head">
+            <div class="card-title">🖨️ Scanner Detection</div>
+            <div class="card-action" onclick="detectScanners()">🔄 Refresh</div>
+          </div>
+          <div id="scanner-status" style="padding: 1rem;">
+            <div style="display: flex; align-items: center; gap: 0.5rem; color: var(--muted);">
+              <span>🔍</span>
+              <span>Searching for connected scanners...</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Scan Settings -->
+        <div class="field">
+          <label>Scan Source</label>
+          <select id="scan-source" onchange="updateScanSettings()">
+            <option value="flatbed">Flatbed Scanner</option>
+            <option value="adf">Automatic Document Feeder (ADF)</option>
+            <option value="camera">Web Camera / Mobile Camera</option>
+          </select>
+        </div>
+
+        <div class="form-row">
+          <div class="field">
+            <label>Resolution (DPI)</label>
+            <select id="scan-resolution">
+              <option value="200">200 DPI (Standard)</option>
+              <option value="300" selected>300 DPI (Recommended)</option>
+              <option value="600">600 DPI (High Quality)</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Color Mode</label>
+            <select id="scan-color">
+              <option value="color">Color</option>
+              <option value="grayscale">Grayscale</option>
+              <option value="bw">Black & White</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Document Type</label>
+          <select id="scan-document-type">
+            <option value="general">General Document</option>
+            <option value="letter">Letter</option>
+            <option value="legal">Legal</option>
+            <option value="a4">A4</option>
+            <option value="receipt">Receipt</option>
+            <option value="business_card">Business Card</option>
+          </select>
+        </div>
+
+        <!-- OCR Options -->
+        <div class="field">
+          <label>OCR Language</label>
+          <select id="ocr-language">
+            <option value="eng" selected>English</option>
+            <option value="fil">Filipino</option>
+            <option value="eng+fil">English + Filipino</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label>
+            <input type="checkbox" id="ocr-auto-enhance" checked style="width: auto; margin-right: 0.5rem;">
+            Auto-enhance image quality for better OCR
+          </label>
+        </div>
+
+        <!-- Scan Preview Area -->
+        <div class="field">
+          <label>Scan Preview</label>
+          <div id="scan-preview" style="border: 2px dashed var(--border); border-radius: 8px; padding: 2rem; text-align: center; min-height: 200px; background: #fafbfc; display: flex; flex-direction: column; align-items: center; justify-content: center;" aria-label="Scan Preview Area">
+            <div style="font-size: 48px; margin-bottom: 1rem; opacity: 0.3;">📷</div>
+            <div style="color: var(--muted); font-size: 14px;">No document scanned yet</div>
+            <div style="color: var(--muted); font-size: 12px; margin-top: 0.5rem;">Click "Start Scanning" to begin</div>
+          </div>
+        </div>
+
+        <!-- OCR Results -->
+        <div class="field" id="ocr-results-section" style="display: none;">
+          <label>OCR Extracted Text</label>
+          <textarea id="ocr-extracted-text" style="width: 100%; min-height: 120px; border: 1.5px solid var(--border); border-radius: 8px; padding: 0.6rem; font-family: monospace; font-size: 13px; resize: vertical;" placeholder="OCR text will appear here..."></textarea>
+          <div style="margin-top: 0.5rem; display: flex; gap: 0.5rem;">
+            <button class="btn-sm" onclick="copyOCRText()" aria-label="Copy OCR Text">📋 Copy Text</button>
+            <button class="btn-sm" onclick="editOCRText()" aria-label="Edit OCR Text">✏️ Edit Text</button>
+            <button class="btn-sm" onclick="retryOCR()" aria-label="Retry OCR">🔄 Retry OCR</button>
+          </div>
+        </div>
+
+        <!-- Encoding Options -->
+        <div class="field" id="encoding-options" style="display: none;">
+          <label>Document Encoding Options</label>
+          <div style="background: var(--pill); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-top: 0.5rem;">
+            <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem;">
+              <input type="radio" id="auto-encode" name="encoding-option" value="auto" checked style="width: auto;" onchange="toggleEncodingOption()">
+              <label for="auto-encode" style="font-weight: 600; color: var(--navy); cursor: pointer;">
+                🤖 Automatically encode to Document Logbook
+              </label>
+            </div>
+            <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem;">
+              <input type="radio" id="manual-encode" name="encoding-option" value="manual" style="width: auto;" onchange="toggleEncodingOption()">
+              <label for="manual-encode" style="font-weight: 600; color: var(--navy); cursor: pointer;">
+                ✍️ Manually encode document details
+              </label>
+            </div>
+            
+            <!-- Auto-encode preview -->
+            <div id="auto-encode-preview" style="background: #fff; border: 1px solid var(--border); border-radius: 6px; padding: 0.75rem;">
+              <div style="font-size: 12px; color: var(--muted); margin-bottom: 0.5rem; font-weight: 600;">PREVIEW (Auto-encode):</div>
+              <div style="font-size: 13px; line-height: 1.5;">
+                <div><strong>Reference:</strong> <span id="preview-ref" style="font-family: monospace; color: var(--info);">2026-04-XXX</span></div>
+                <div><strong>Type:</strong> <span id="preview-type">OCR Scanned Document</span></div>
+                <div><strong>From:</strong> <span id="preview-from">Scanner</span></div>
+                <div><strong>Subject:</strong> <span id="preview-subject">Document scanned on [Date]</span></div>
+                <div><strong>Status:</strong> <span class="pill pill-amber">For Processing</span></div>
+              </div>
+            </div>
+            
+            <!-- Manual encode form -->
+            <div id="manual-encode-form" style="display: none; background: #fff; border: 1px solid var(--border); border-radius: 6px; padding: 0.75rem;">
+              <div style="font-size: 12px; color: var(--muted); margin-bottom: 0.75rem; font-weight: 600;">MANUAL ENCODING FORM:</div>
+              <div class="form-row">
+                <div class="field" style="margin-bottom: 0.5rem;">
+                  <label>Document Type</label>
+                  <select id="manual-doc-type">
+                    <option value="Memorandum">Memorandum</option>
+                    <option value="Letter">Letter</option>
+                    <option value="Bill / Financial">Bill / Financial</option>
+                    <option value="Report">Report</option>
+                    <option value="Endorsement">Endorsement</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+                <div class="field" style="margin-bottom: 0.5rem;">
+                  <label>Direction</label>
+                  <select id="manual-direction">
+                    <option value="incoming">Incoming</option>
+                    <option value="outgoing">Outgoing</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="field" style="margin-bottom: 0.5rem;">
+                  <label>From / Sender</label>
+                  <input type="text" id="manual-from" placeholder="Sender name or office">
+                </div>
+                <div class="field" style="margin-bottom: 0.5rem;">
+                  <label>To / Recipient</label>
+                  <input type="text" id="manual-to" placeholder="Recipient name or office">
+                </div>
+              </div>
+              <div class="field" style="margin-bottom: 0.5rem;">
+                <label>Subject / Title</label>
+                <input type="text" id="manual-subject" placeholder="Document subject or title">
+              </div>
+              <div class="field" style="margin-bottom: 0.5rem;">
+                <label>Remarks</label>
+                <textarea id="manual-remarks" style="width: 100%; min-height: 60px; border: 1.5px solid var(--border); border-radius: 6px; padding: 0.5rem; font-family: var(--font); font-size: 13px; resize: vertical;" placeholder="Additional remarks or notes..."></textarea>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer" id="ocr-modal-footer">
+      <button class="btn-sec" onclick="closeOCRScanner()" aria-label="Cancel" >Cancel</button>
+      <button class="btn-sec" onclick="detectScanners()" aria-label="Refresh Scanners">🔄 Refresh Scanners</button>
+      <button class="btn-send" onclick="startScanning()" id="start-scan-btn" aria-label="Start Scanning">📷 Start Scanning</button>
+    </div>
+  </div>
+</div>
+
+<!-- QUICK SEND EXISTING DOCUMENT MODAL -->
+<div class="modal-overlay" id="quick-send-modal">
+  <div class="modal" style="max-width: 520px">
+    <div class="modal-head">
+      <h3 id="quick-send-title">Send Document</h3>
+      <span class="modal-close" onclick="closeQuickSend()" aria-label="Close">✕</span>
+    </div>
+    <div class="modal-body">
+      <div class="compose-wrap">
+        <div class="compose-to">
+          <label>Send To:</label>
+          ><input
+            id="quick-send-to"
+            list="compose-recipient-list"
+            placeholder="Recipient name, role, or email..."
+            aria-label="Recipient"
+          />
+        </div>
+        <div class="field">
+          <label>Remarks</label>
+          ><textarea
+            id="quick-send-remarks"
+            class="compose-body"
+            style="
+              border: 1.5px solid var(--border);
+              border-radius: 8px;
+              padding: 0.6rem;
+              width: 100%;
+              min-height: 90px;
+              font-family: var(--font);
+              font-size: 14px;
+              outline: none;
+            "
+            placeholder="Add routing remarks..."
+          ></textarea>
+        </div>
+        <div class="quick-send-note">
+          Document details are already saved. Sending here will automatically update routing and status.
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-sec" onclick="closeQuickSend()" aria-label="Cancel">Cancel</button>
+      <button class="btn-send" onclick="submitQuickSend()" aria-label="Send Document">Send Document ↗</button>
+    </div>
+  </div>
+</div>
+
+<!-- Global modal container (for account/settings popups) -->
+<div id="global-modal-container"></div>
+
+<script src="./depdev_dms_prototype.js"></script>
+
+
+ <!-- Loading Spinner -->
+<div id="loader">
+  <div class="spinner"></div>
+  <p>Loading...</p>
+</div>
+
+
+
+
+</body>
+</html>
+
