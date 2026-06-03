@@ -66,7 +66,7 @@
                   <label class="auth-label">EMAIL ADDRESS</label>
                   <span class="auth-label-icon">✉️</span>
                 </div>
-                <input type="email" class="auth-input-line" id="login-email" value="admin@depdev7.gov.ph" />
+                <input type="email" class="auth-input-line" id="login-email" value="harry@depdev7.gov.ph" />
               </div>
 
               <div class="auth-input-group">
@@ -76,12 +76,7 @@
                 </div>
                 <div class="auth-input-wrap-line">
                   <input type="password" class="auth-input-line" id="login-pass" value="password" />
-                  <button type="button" class="auth-icon-btn-line" id="login-pass-toggle" onclick="
-                        togglePasswordVisibility(
-                          'login-pass',
-                          'login-pass-toggle',
-                        )
-                      " title="Show/Hide password">
+                  <button type="button" class="auth-icon-btn-line" id="login-pass-toggle" onclick="togglePasswordVisibility('login-pass', 'login-pass-toggle')" title="Show/Hide password">
                     👁️
                   </button>
                 </div>
@@ -198,12 +193,7 @@
                     <input type="password" class="auth-input with-left-icon with-right-icon" placeholder="⬢⬢⬢⬢⬢⬢⬢"
                       id="signup-password" />
                     <span class="auth-icon-left">🔒</span>
-                    <button type="button" class="auth-icon-btn" id="signup-pass-toggle" onclick="
-                          togglePasswordVisibility(
-                            'signup-password',
-                            'signup-pass-toggle',
-                          )
-                        " title="Show/Hide password">
+                    <button type="button" class="auth-icon-btn" id="signup-pass-toggle" onclick="togglePasswordVisibility('signup-password', 'signup-pass-toggle')" title="Show/Hide password">
                       👁️
                     </button>
                   </div>
@@ -214,12 +204,7 @@
                     <input type="password" class="auth-input with-left-icon with-right-icon" placeholder="⬢⬢⬢⬢⬢⬢⬢"
                       id="signup-confirm-password" />
                     <span class="auth-icon-left">🔒</span>
-                    <button type="button" class="auth-icon-btn" id="signup-confirm-pass-toggle" onclick="
-                          togglePasswordVisibility(
-                            'signup-confirm-password',
-                            'signup-confirm-pass-toggle',
-                          )
-                        " title="Show/Hide password">
+                    <button type="button" class="auth-icon-btn" id="signup-confirm-pass-toggle" onclick="togglePasswordVisibility('signup-confirm-password', 'signup-confirm-pass-toggle')" title="Show/Hide password">
                       👁️
                     </button>
                   </div>
@@ -326,16 +311,14 @@
       <!-- SIDEBAR -->
       <div class="sidebar">
         <div class="sb-logo">
-          <div class="sb-logo-row">
-            <div class="sb-logo-badge">
-              <img src="logobg.png" alt="DMS Logo" class="sb-logo-img" onerror="
-                    this.style.display = 'none';
-                    this.nextElementSibling.style.display = 'flex';
-                  " />
-              <span class="sb-logo-fallback">DMS</span>
-            </div>
-            <div class="sb-logo-name">Document Management System</div>
+          <div class="sb-logo-badge">
+            <img src="logobg.png" alt="DMS Logo" class="sb-logo-img" onerror="
+                  this.style.display = 'none';
+                  this.nextElementSibling.style.display = 'flex';
+                " />
+            <span class="sb-logo-fallback">DMS</span>
           </div>
+          <div class="sb-logo-name"><span>Document Management</span><span>System</span></div>
         </div>
         <div class="sb-user">
           <div class="sb-avatar" id="sb-avatar">H</div>
@@ -362,7 +345,6 @@
             <img src="logo.png" alt="DMS Logo" class="topbar-logo" />
           </div>
           <div class="topbar-search">
-            <span style="font-size: 14px; color: var(--muted)">🔍</span>
             <input placeholder="Search documents..." id="search-input" oninput="doSearch(this.value)" />
           </div>
           <div class="topbar-right">
@@ -480,7 +462,6 @@
               <option value="Memorandum">Memorandum</option>
               <option value="Letter">Letter</option>
               <option value="Bill / Financial">Bill / Financial</option>
-              !--
               <option value="Report">Report</option>
               <option value="Endorsement">Endorsement</option>
               <option value="Other">Other</option>
@@ -1164,8 +1145,13 @@
                                 ">
                               From
                             </div>
-                            <div id="preview-from" style="font-weight: 600">
-                              ---
+                            <div style="display:flex;flex-direction:column;gap:3px;">
+                              <div id="preview-from" style="font-weight: 600">
+                                ---
+                              </div>
+                              <div id="preview-division" style="font-size:11px;color:var(--muted);">
+                                ---
+                              </div>
                             </div>
                           </div>
                           <div style="grid-column: span 2">
@@ -1263,16 +1249,16 @@
         <div class="compose-wrap">
           <div class="compose-to">
             <label>Send To:</label>
-            ><input id="quick-send-to" list="compose-recipient-list" placeholder="Recipient name, role, or email..."
+            <input id="quick-send-to" list="compose-recipient-list" placeholder="Recipient name, role, or email..."
               aria-label="Recipient" />
           </div>
           <div class="field">
             <label>Remarks</label>
-            ><textarea id="quick-send-remarks" class="compose-body" style="
+            <textarea id="quick-send-remarks" class="compose-body" style="
                   border: 1.5px solid var(--border);
                   border-radius: 8px;
                   padding: 0.6rem;
-                  width: 100%;
+                  width: 100%;"
                   min-height: 90px;
                   font-family: var(--font);
                   font-size: 14px;
@@ -1301,10 +1287,85 @@
 
   <script src="./depdev_dms_prototype.js"></script>
 
+  <!-- CREATE ANNOUNCEMENT MODAL -->
+  <div class="modal-overlay" id="create-announcement-modal">
+    <div class="modal" style="max-width: 520px">
+      <div class="modal-head">
+        <h3>📌 Create Official Announcement</h3>
+        <span class="modal-close" onclick="closeCreateAnnouncementModal()">✕</span>
+      </div>
+      <div class="modal-body">
+        <div class="compose-wrap">
+          <div class="field">
+            <label>Announcement Title</label>
+            <input type="text" id="new-ann-title" placeholder="Enter announcement title..." />
+          </div>
+          <div class="field">
+            <label>Announcement Content</label>
+            <textarea id="new-ann-content" placeholder="Enter detailed announcement content..." style="min-height: 120px; font-family: var(--font); font-size: 14px; width: 100%; border: 1.5px solid var(--border); border-radius: 8px; padding: 0.6rem; outline: none; resize: vertical;"></textarea>
+          </div>
+          <div class="form-row" style="display: flex; gap: 1rem">
+            <div class="field" style="flex: 1">
+              <label>Priority Level</label>
+              <select id="new-ann-priority" style="width: 100%; padding: 0.6rem; border: 1.5px solid var(--border); border-radius: 8px; outline: none; background: #fff; font-family: var(--font);">
+                <option value="Normal">Normal</option>
+                <option value="Important">Important</option>
+                <option value="Urgent">Urgent</option>
+              </select>
+            </div>
+            <div class="field" style="flex: 1">
+              <label>Expiration Date (Optional)</label>
+              <input type="date" id="new-ann-expiry" style="width: 100%; font-family: var(--font);" />
+            </div>
+          </div>
+          <div class="field" style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem">
+            <input type="checkbox" id="new-ann-pinned" style="width: 16px; height: 16px; cursor: pointer;" />
+            <label for="new-ann-pinned" style="font-size: 13.5px; font-weight: 500; cursor: pointer; text-transform: none; letter-spacing: 0; margin-bottom: 0;">Pin announcement to top</label>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-sec" onclick="closeCreateAnnouncementModal()">Cancel</button>
+        <button class="btn-send" onclick="publishAnnouncement()" style="background: var(--navy); border-color: var(--navy);">Publish</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ANNOUNCEMENT DETAIL MODAL -->
+  <div class="modal-overlay" id="announcement-detail-modal">
+    <div class="modal" style="max-width: 520px">
+      <div class="modal-head">
+        <h3 id="detail-ann-title">Announcement Details</h3>
+        <span class="modal-close" onclick="closeAnnouncementDetailModal()">✕</span>
+      </div>
+      <div class="modal-body" style="padding: 1.25rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+          <span id="detail-ann-priority-badge"></span>
+          <span id="detail-ann-date" style="font-size: 12px; color: var(--muted);"></span>
+        </div>
+        <div id="detail-ann-content" style="font-size: 14px; line-height: 1.6; color: var(--text); background: #f8fafc; padding: 1rem; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 1rem; white-space: pre-wrap;">
+        </div>
+        <div style="font-size: 12px; color: var(--muted); display: flex; justify-content: space-between; border-top: 1px dashed var(--border); padding-top: 0.75rem;">
+          <span id="detail-ann-postedby"></span>
+          <span id="detail-ann-pinned-status" style="font-weight: 600; color: var(--gold);"></span>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-sec" onclick="closeAnnouncementDetailModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Loading Spinner -->
   <div id="loader">
     <div class="spinner"></div>
     <p>Loading...</p>
+  </div>
+
+  <!-- OIC Duty Transition Fade -->
+  <div id="oic-duty-fade">
+    <div class="oic-duty-spinner"></div>
+    <p>Assuming OIC Duty...</p>
   </div>
 </body>
 

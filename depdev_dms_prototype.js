@@ -1,5 +1,26 @@
 var currentUser = { role: "admin", name: "Sir Harry", division: null };
 var currentPage = "dashboard";
+
+const announcements = [
+  {
+    id: 1,
+    title: "Quarterly Staff Meeting",
+    content: "All personnel are required to attend the quarterly staff meeting.",
+    postedBy: "System Administrator",
+    priority: "Important",
+    pinned: true,
+    datePosted: "2026-06-15"
+  },
+  {
+    id: 2,
+    title: "New Memorandum Released",
+    content: "Memorandum No. 2026-015 has been officially released.",
+    postedBy: "Regional Director",
+    priority: "Normal",
+    pinned: false,
+    datePosted: "2026-06-12"
+  }
+];
 var REF_COUNTER_BY_MONTH = {};
 var currentEditingRef = null;
 var currentLogbookEditRef = null;
@@ -62,6 +83,34 @@ function showLoading(show) {
     } else {
       loader.classList.remove("show");
     }
+  }
+}
+
+function showOICDutyFade(show, designation) {
+  const oicFade = document.getElementById("oic-duty-fade");
+  if (!oicFade) return;
+
+  // Clear previous variant classes
+  oicFade.classList.remove("oic-rd", "oic-ard");
+
+  if (show) {
+    // Apply variant class and message based on designation
+    if (designation === "rd") {
+      oicFade.classList.add("oic-rd");
+      const p = oicFade.querySelector("p");
+      if (p) p.textContent = "Assuming OIC - Regional Director...";
+    } else if (designation === "ard") {
+      oicFade.classList.add("oic-ard");
+      const p = oicFade.querySelector("p");
+      if (p) p.textContent = "Assuming OIC - Assistant RD...";
+    } else {
+      const p = oicFade.querySelector("p");
+      if (p) p.textContent = "Assuming OIC Duty...";
+    }
+
+    oicFade.classList.add("show");
+  } else {
+    oicFade.classList.remove("show", "oic-rd", "oic-ard");
   }
 }
 
@@ -358,14 +407,14 @@ function toggleSidebar() {
   const hamburger = document.getElementById("hamburger-btn");
   const overlay = document.getElementById("sidebar-overlay");
 
-  if (sidebar) {
-    sidebar.classList.toggle("open");
-  }
-  if (hamburger) {
-    hamburger.classList.toggle("active");
-  }
-  if (overlay) {
-    overlay.classList.toggle("open");
+  if (window.innerWidth <= 768) {
+    // Mobile: slide in/out
+    if (sidebar) sidebar.classList.toggle("open");
+    if (hamburger) hamburger.classList.toggle("active");
+    if (overlay) overlay.classList.toggle("open");
+  } else {
+    // Desktop: collapse/expand
+    if (sidebar) sidebar.classList.toggle("collapsed");
   }
 }
 
@@ -1229,6 +1278,7 @@ var MASTER_NAV = [
     label: "Communication",
     items: [
       { icon: "🔔", text: "Notifications", page: "notifications" },
+      { icon: "📌", text: "Bulletin Board", page: "announcements" },
     ],
   },
   {
@@ -1311,6 +1361,23 @@ function showScreen(id) {
 function loginAs(role) {
   showLoading(true);
   currentUser = Object.assign({}, USERS[role]);
+  
+  // Sync with USER_ACCOUNTS to get OIC approval and other account details
+  var accountData = USER_ACCOUNTS.find(function(u) {
+    return u.email === currentUser.email || u.name === currentUser.name;
+  });
+  if (accountData) {
+    // Merge in account-level properties (oicApproved, oicRequest, etc.)
+    currentUser = Object.assign({}, currentUser, {
+      id: accountData.id,
+      oicApproved: accountData.oicApproved,
+      oicRequest: accountData.oicRequest,
+      docAccess: accountData.docAccess,
+      funcAccess: accountData.funcAccess,
+      features: accountData.features
+    });
+  }
+  
   showApp();
 
   showLoading(false);
@@ -1398,6 +1465,24 @@ function doSignup() {
 function doLogin() {
   showLoading(true);
   setTimeout(() => {
+    // Try to resolve the entered email to a known account
+    var emailInput = (document.getElementById("login-email") || {}).value || "";
+    var acct = USER_ACCOUNTS.find(function (u) {
+      return u.email && u.email.toLowerCase() === (emailInput || "").toLowerCase();
+    });
+
+    if (acct) {
+      currentUser = Object.assign({}, USERS[acct.role && acct.role.toLowerCase()] || {}, {
+        name: acct.name,
+        role: (acct.role || "").toLowerCase(),
+        roleLabel: acct.role || acct.roleLabel || "",
+        email: acct.email,
+        division: acct.division || null,
+        id: acct.id,
+      });
+    }
+
+    // If no matching account was found, keep existing currentUser (default dev user)
     showApp();
     showLoading(false);
     showSuccess(
@@ -1452,9 +1537,17 @@ function toggleOICDuty(designation) {
       currentUser.funcAccess = "Clearance";
       currentUser.features = getFeaturesForRole("oic");
     }
-    showSuccess("You have assumed " + currentUser.roleLabel + " duty.");
+    
+    // Show custom OIC duty fade effect (use specific gradient/message)
+    showOICDutyFade(true, designation);
+    setTimeout(function() {
+      showApp();
+      showOICDutyFade(false);
+      showSuccess("You have assumed " + currentUser.roleLabel + " duty.");
+    }, 400);
+    return;
   } else {
-    // Restore normal Chief duty
+    // Restore normal Chief duty (keep original behavior - no fade)
     if (originalUserState) {
       currentUser = Object.assign({}, originalUserState);
       originalUserState = null;
@@ -1667,24 +1760,36 @@ function showApp() {
 
       var optOicRd = document.createElement("option");
       optOicRd.value = "rd";
+      var rdCleared = u.oicApproved === "rd";
       if (u.oicRequest === "rd") {
         optOicRd.textContent = "⏳ Pending OIC RD Approval...";
         optOicRd.selected = true;
-      } else {
-        var isApproved = u.oicApproved === "rd" ? " (Cleared)" : "";
-        optOicRd.textContent = "👑 Acting OIC - RD" + isApproved;
+        optOicRd.disabled = true; // pending — cannot re-select, only cancel
+      } else if (rdCleared) {
+        optOicRd.textContent = "👑 Acting OIC - RD (Cleared)";
         if (originalUserState && currentUser.role === "rd") optOicRd.selected = true;
+      } else {
+        // Not approved and not pending — disable so DC cannot click it
+        optOicRd.textContent = "👑 Acting OIC - RD (Not Assigned)";
+        optOicRd.disabled = true;
+        optOicRd.title = "You have not been designated OIC for RD. Contact Admin or RD.";
       }
 
       var optOicArd = document.createElement("option");
       optOicArd.value = "ard";
+      var ardCleared = u.oicApproved === "ard";
       if (u.oicRequest === "ard") {
         optOicArd.textContent = "⏳ Pending OIC ARD Approval...";
         optOicArd.selected = true;
-      } else {
-        var isApproved = u.oicApproved === "ard" ? " (Cleared)" : "";
-        optOicArd.textContent = "⚡ Acting OIC - ARD" + isApproved;
+        optOicArd.disabled = true; // pending — cannot re-select
+      } else if (ardCleared) {
+        optOicArd.textContent = "⚡ Acting OIC - ARD (Cleared)";
         if (originalUserState && currentUser.role === "oic") optOicArd.selected = true;
+      } else {
+        // Not approved and not pending — disable so DC cannot click it
+        optOicArd.textContent = "⚡ Acting OIC - ARD (Not Assigned)";
+        optOicArd.disabled = true;
+        optOicArd.title = "You have not been designated OIC for ARD. Contact Admin, ARD, or RD.";
       }
 
       select.appendChild(optNormal);
@@ -1752,16 +1857,17 @@ function renderNav() {
         item.page +
         '\')" id="nav-' +
         item.page +
-        '"><span class="sb-icon">' +
+        '" title="' + item.text + '"><span class="sb-icon">' +
         item.icon +
-        "</span>" +
+        "</span><span class='sb-item-text'>" +
         item.text +
+        "</span>" +
         (item.badge ? '<span class="sb-badge">' + item.badge + "</span>" : "") +
         "</div>";
     });
   });
   html +=
-    '<div class="sb-item" onclick="doLogout()" id="nav-signout"><span class="sb-icon">⬅</span>Sign out</div>';
+    '<div class="sb-item" onclick="doLogout()" id="nav-signout" title="Sign out"><span class="sb-icon">⬅</span><span class="sb-item-text">Sign out</span></div>';
   el.innerHTML = html;
 }
 
@@ -1815,6 +1921,7 @@ function showPage(page) {
     notifications: "Notifications",
     reports: "Reports",
     approved: "Approved Documents",
+    announcements: "Announcements",
     "enhanced-reports": "Reports",
   };
   var c = document.getElementById("main-content");
@@ -1833,6 +1940,10 @@ function showPage(page) {
   else if (page === "settings") c.innerHTML = titleHeader + renderSettings();
   else if (page === "notifications")
     c.innerHTML = titleHeader + renderNotifications();
+  else if (page === "announcements") {
+    c.innerHTML = titleHeader + renderAnnouncementsPage();
+    renderAnnouncementsPageList("");
+  }
   else if (page === "outgoing") c.innerHTML = titleHeader + renderOutgoing();
   else if (page === "incoming") c.innerHTML = titleHeader + renderIncoming();
   else if (page === "pending-docs") c.innerHTML = titleHeader + renderPendingDocs();
@@ -2036,6 +2147,34 @@ function escapeHtml(value) {
     .replace(/'/g, "&#39;");
 }
 
+function getDivisionAbbrev(div) {
+  if (!div) return "—";
+  var map = {
+    "Monitoring and Evaluation Division": "MED",
+    "Policy Formulation and Planning Division": "PFP",
+    "Project Development, Investment Programming and Budget Division": "PDIP",
+    "Development and Research Division": "DRD",
+    "Finance and Administrative Division": "FAD",
+    "Office of the Regional Director": "ORD",
+    "Finance Division": "FAD",
+    "Regional Staff": "RS"
+  };
+  if (map[div]) return map[div];
+  if (div.length <= 6 && !div.includes(" ")) return div;
+  // Fallback: take initials of up to 6 letters
+  var parts = div
+    .replace(/[,()]/g, "")
+    .split(/\s+/)
+    .filter(function (p) {
+      return p && p.length > 0;
+    });
+  var abbr = parts.map(function (p) {
+    return p[0].toUpperCase();
+  }).join("");
+  return abbr.slice(0, 6) || div.slice(0, 6).toUpperCase();
+}
+
+
 function renderActionsMenu(ref, editFn) {
   var ef = editFn || "openEditor";
   return (
@@ -2088,12 +2227,19 @@ function renderDashboard() {
   // Role-aware welcome
   h +=
     '<div style="background:linear-gradient(110deg,var(--navy) 0%,var(--navy3) 100%);border-radius:14px;padding:1.5rem 2rem;color:#fff;margin-bottom:1.5rem;display:flex;align-items:center;justify-content:space-between">';
+  // determine badge class for role (RD -> rd, OIC (ARD) -> ard)
+  var badgeClass = "";
+  if (currentUser.role === "rd") badgeClass = "rd";
+  else if (currentUser.role === "oic") badgeClass = "ard";
+
   h +=
     '<div><div style="font-size:13px;color:rgba(255,255,255,.6);margin-bottom:.25rem">Good day,</div><div style="font-size:22px;font-weight:700">' +
     currentUser.name +
     '</div><div style="font-size:13px;color:rgba(255,255,255,.65);margin-top:.3rem">' +
+    '<span class="role-badge ' + badgeClass + '">' +
     currentUser.roleLabel +
     (currentUser.division ? " · " + currentUser.division : "") +
+    '</span>' +
     "</div></div>";
   h +=
     '<div style="text-align:right"><div style="font-size:13px;color:rgba(255,255,255,.5)">Today</div><div style="font-size:18px;font-weight:600">May 14, 2026</div><div style="font-size:12px;color:rgba(255,255,255,.5);margin-top:.25rem">Reference: 2026-05-</div></div>';
@@ -2199,10 +2345,10 @@ function renderDashboard() {
   }
   h += "</div>";
 
-  h += '<div class="grid2">';
+  h += '<div class="grid-three">';
   // Recent docs (filtered by visibility)
   h +=
-    '<div class="card"><div class="card-head"><div class="card-title">Recent Documents</div><div class="card-action" onclick="showPage(\'incoming\')">View all →</div></div>';
+    '<div class="card"><div class="card-head" style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;"><div class="card-title">Recent Documents</div><button class="btn-sm" onclick="showPage(\'incoming\')" style="font-size: 11px; padding: 0.25rem 0.6rem; min-height: unset;">View All</button></div>';
   h +=
     '<table class="doc-table"><thead><tr><th>Reference</th><th>Subject</th><th>Status</th></tr></thead><tbody>';
   visibleDocs.slice(0, 5).forEach(function (d) {
@@ -2219,6 +2365,17 @@ function renderDashboard() {
       "</td></tr>";
   });
   h += "</tbody></table></div>";
+
+  // Card 2: Latest Announcements
+  h += '<div class="card">';
+  h += '  <div class="card-head">';
+  h += '    <div class="card-title">Latest Announcements</div>';
+  h += '    <button class="btn-sm" onclick="showPage(\'announcements\')" style="font-size: 11px; padding: 0.25rem 0.6rem; min-height: unset;">View All</button>';
+  h += '  </div>';
+  h += '  <div id="latest-announcements-list">';
+  h += renderLatestAnnouncementsList();
+  h += '  </div>';
+  h += '</div>';
 
   // Workflow tracker
   h +=
@@ -2324,13 +2481,17 @@ function renderApproved() {
       '<div style="padding:4rem;text-align:center;color:var(--muted)">No approved documents found.</div>';
   } else {
     h +=
-      '<table class="doc-table"><thead><tr><th>Reference</th><th>Type</th><th>Subject</th><th>Date</th><th>Status</th><th style="text-align:right">Actions</th></tr></thead><tbody>';
+      '<table class="doc-table"><thead><tr><th>Reference</th><th>Type</th><th>Division</th><th>Subject</th><th>Date</th><th>Status</th><th>Actions</th></tr></thead><tbody>';
     approvedDocs.forEach(function (d) {
+      var divFull = d.division || "";
+      var divAbbrev = divFull ? getDivisionAbbrev(divFull) : "—";
       h +=
         '<tr><td style="font-family:monospace;font-weight:600">' +
         d.ref +
         "</td><td>" +
         d.type +
+        "</td><td title=\"" + escapeHtml(divFull) + "\">" +
+        divAbbrev +
         "</td><td>" +
         d.subject +
         "</td><td>" +
@@ -2368,16 +2529,18 @@ function renderPendingDocs() {
     pendingDocs.length +
     " records</div></div>";
   h +=
-    '<table class="doc-table"><thead><tr><th>Reference No.</th><th>Direction</th><th>Type</th><th>From</th><th>Subject</th><th>Date</th><th>Status</th><th></th></tr></thead><tbody>';
+    '<table class="doc-table"><thead><tr><th>Reference No.</th><th>Direction</th><th>Type</th><th>From</th><th>Division</th><th>Subject</th><th>Date</th><th>Status</th><th>Actions</th></tr></thead><tbody>';
 
   if (pendingDocs.length === 0) {
     h +=
-      '<tr><td colspan="8" style="text-align:center;padding:2rem;color:var(--muted)">No pending documents found.</td></tr>';
+      '<tr><td colspan="9" style="text-align:center;padding:2rem;color:var(--muted)">No pending documents found.</td></tr>';
   } else {
     pendingDocs.forEach(function (d) {
       var conf = d.conf
         ? '<span class="pill pill-red" style="margin-left:4px">Conf.</span>'
         : "";
+      var divFull = d.division || "";
+      var divAbbrev = divFull ? getDivisionAbbrev(divFull) : "—";
       h +=
         "<tr><td style=\"font-family:monospace;font-size:12px\">" +
         d.ref +
@@ -2388,6 +2551,8 @@ function renderPendingDocs() {
         conf +
         "</td><td>" +
         d.from +
+        "</td><td title=\"" + escapeHtml(divFull) + "\">" +
+        divAbbrev +
         "</td><td>" +
         d.subject +
         "</td><td>" +
@@ -2434,11 +2599,13 @@ function renderIncoming() {
     incomingDocs.length +
     " records</div></div>";
   h +=
-    '<table class="doc-table"><thead><tr><th>Reference No.</th><th>Direction</th><th>Type</th><th>From</th><th>Subject</th><th>Date</th><th>Status</th><th></th></tr></thead><tbody>';
+    '<table class="doc-table"><thead><tr><th>Reference No.</th><th>Direction</th><th>Type</th><th>From</th><th>Division</th><th>Subject</th><th>Date</th><th>Status</th><th>Actions</th></tr></thead><tbody>';
   incomingDocs.forEach(function (d) {
     var conf = d.conf
       ? '<span class="pill pill-red" style="margin-left:4px">Conf.</span>'
       : "";
+    var divFull = d.division || "";
+    var divAbbrev = divFull ? getDivisionAbbrev(divFull) : "—";
     h +=
       '<tr><td style="font-family:monospace;font-size:12px">' +
       d.ref +
@@ -2449,6 +2616,8 @@ function renderIncoming() {
       conf +
       "</td><td>" +
       d.from +
+      "</td><td title=\"" + escapeHtml(divFull) + "\">" +
+      divAbbrev +
       "</td><td>" +
       d.subject +
       "</td><td>" +
@@ -2470,15 +2639,22 @@ function renderOutgoing() {
   h +=
     '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem">';
   h +=
-    '<div class="tab-bar"><div class="tab active">All</div><div class="tab">Draft</div><div class="tab">For Approval</div><div class="tab">Released</div></div>';
+    '<div class="tab-bar" id="out-tabs"><div class="tab active" onclick="setTab(this,\'all\')">All</div><div class="tab" onclick="setTab(this,\'pending\')">Pending</div><div class="tab" onclick="setTab(this,\'released\')">Released</div></div>';
   h +=
-    '<button class="btn-sm primary" onclick="openCompose()">+ New Document</button>';
+    '<button class="btn-sm primary" onclick="openCompose()">+ Send Document</button>';
   h += "</div>";
   h +=
-    '<div class="card"><div class="card-head"><div class="card-title">Outgoing Documents</div></div>';
+    '<div class="card"><div class="card-head"><div class="card-title">Outgoing Documents</div><div style="font-size:12px;color:var(--muted)">' +
+    outgoingDocs.length +
+    " records</div></div>";
   h +=
-    '<table class="doc-table"><thead><tr><th>Reference No.</th><th>Direction</th><th>Type</th><th>To</th><th>Subject</th><th>Date</th><th>Status</th><th></th></tr></thead><tbody>';
+    '<table class="doc-table"><thead><tr><th>Reference No.</th><th>Direction</th><th>Type</th><th>To</th><th>Division</th><th>Subject</th><th>Date</th><th>Status</th><th>Actions</th></tr></thead><tbody>';
   outgoingDocs.forEach(function (d) {
+    var conf = d.conf
+      ? '<span class="pill pill-red" style="margin-left:4px">Conf.</span>'
+      : "";
+    var divFull = d.division || "";
+    var divAbbrev = divFull ? getDivisionAbbrev(divFull) : "—";
     h +=
       '<tr><td style="font-family:monospace;font-size:12px">' +
       d.ref +
@@ -2486,8 +2662,11 @@ function renderOutgoing() {
       flowPill(d.kind) +
       "</td><td>" +
       d.type +
+      conf +
       "</td><td>" +
       d.to +
+      "</td><td title=\"" + escapeHtml(divFull) + "\">" +
+      divAbbrev +
       "</td><td>" +
       d.subject +
       "</td><td>" +
@@ -2582,12 +2761,14 @@ function renderLogbook() {
     h += renderSimpleLogbookNavigation();
   }
   h +=
-    '<div class="card"><table class="doc-table"><thead><tr><th>#</th><th>Reference No.</th><th>Direction</th><th>Date Received</th><th>Last Updated</th><th>Type</th><th>From / Sender</th><th>Subject</th><th>Routed To</th><th>Status</th><th>Physical Copy</th><th>Actions</th></tr></thead><tbody>';
+    '<div class="card"><table class="doc-table"><thead><tr><th>#</th><th>Reference No.</th><th>Direction</th><th>Date Received</th><th>Last Updated</th><th>Type</th><th>From / Sender</th><th>Division</th><th>Subject</th><th>Routed To</th><th>Status</th><th>Physical Copy</th><th>Actions</th></tr></thead><tbody>';
   visibleDocs.forEach(function (d, i) {
     var lastUpdated =
       d.tracking && d.tracking.lastUpdated
         ? formatTimestamp(d.tracking.lastUpdated)
         : d.date;
+    var divFull = d.division || "";
+    var divAbbrev = divFull ? getDivisionAbbrev(divFull) : "—";
     h +=
       '<tr><td style="color:var(--muted)">' +
       (i + 1) +
@@ -2603,13 +2784,15 @@ function renderLogbook() {
       d.type +
       "</td><td>" +
       d.from +
+      "</td><td title=\"" + escapeHtml(divFull) + "\">" +
+      divAbbrev +
       "</td><td>" +
       d.subject +
       "</td><td>" +
       d.to +
       "</td><td>" +
       statusPill(d.status) +
-      '</td><td style="text-align:center">' +
+      "</td><td style=\"text-align:center\">" +
       (d.physicalCopy ? "✔️" : "—") +
       "</td><td>" +
       renderActionsMenu(d.ref, "openLogbookEdit") +
@@ -3181,6 +3364,7 @@ var USER_ACCOUNTS = [
       "disposal",
       "users",
       "notifications",
+      "announcements",
       "enhanced-reports",
     ],
   },
@@ -3203,6 +3387,7 @@ var USER_ACCOUNTS = [
       "archive",
       "users",
       "notifications",
+      "announcements",
       "enhanced-reports",
     ],
   },
@@ -3225,6 +3410,7 @@ var USER_ACCOUNTS = [
       "archive",
       "users",
       "notifications",
+      "announcements",
       "enhanced-reports",
     ],
   },
@@ -3246,6 +3432,7 @@ var USER_ACCOUNTS = [
       "logbook",
       "users",
       "notifications",
+      "announcements",
       "enhanced-reports",
     ],
   },
@@ -3267,6 +3454,7 @@ var USER_ACCOUNTS = [
       "archive",
       "users",
       "notifications",
+      "announcements",
       "enhanced-reports",
     ],
   },
@@ -3285,6 +3473,7 @@ var USER_ACCOUNTS = [
       "outgoing",
       "logbook",
       "notifications",
+      "announcements",
       "enhanced-reports",
     ],
   },
@@ -3303,6 +3492,7 @@ var USER_ACCOUNTS = [
       "outgoing",
       "logbook",
       "notifications",
+      "announcements",
       "enhanced-reports",
     ],
   },
@@ -3320,6 +3510,7 @@ function getFeaturesForRole(role) {
       "archive",
       "users",
       "notifications",
+      "announcements",
       "enhanced-reports",
     ];
     if (role === "admin" || role === "Admin") {
@@ -3335,6 +3526,7 @@ function getFeaturesForRole(role) {
       "logbook",
       "users",
       "notifications",
+      "announcements",
       "enhanced-reports",
     ];
   if (role === "custodian" || role === "Division Custodian")
@@ -3347,6 +3539,7 @@ function getFeaturesForRole(role) {
       "archive",
       "users",
       "notifications",
+      "announcements",
       "enhanced-reports",
     ];
   return [
@@ -3355,6 +3548,7 @@ function getFeaturesForRole(role) {
     "outgoing",
     "logbook",
     "notifications",
+    "announcements",
     "enhanced-reports",
   ];
 }
@@ -4173,7 +4367,7 @@ function renderSearch() {
   h +=
     '<div class="card"><div class="card-head"><div class="card-title">Results — all documents</div></div>';
   h +=
-    '<table class="doc-table"><thead><tr><th>Reference No.</th><th>Type</th><th>Subject</th><th>From/To</th><th>Date</th><th>Status</th><th></th></tr></thead><tbody>';
+    '<table class="doc-table"><thead><tr><th>Reference No.</th><th>Type</th><th>Subject</th><th>From/To</th><th>Date</th><th>Status</th><th>Actions</th></tr></thead><tbody>';
   DOCS.forEach(function (d) {
     h +=
       '<tr><td style="font-family:monospace;font-size:12px">' +
@@ -4658,7 +4852,7 @@ function renderArchive() {
     h += "</div>";
   } else {
     h +=
-      '<table class="doc-table"><thead><tr><th>Reference</th><th>Subject</th><th>Release Date</th><th>Status</th><th style="text-align:right">Actions</th></tr></thead><tbody>';
+      '<table class="doc-table"><thead><tr><th>Reference</th><th>Subject</th><th>Release Date</th><th>Status</th><th>Actions</th></tr></thead><tbody>';
     released.forEach(function (d) {
       h +=
         '<tr><td style="font-family:monospace;font-weight:600">' +
@@ -4723,7 +4917,7 @@ function renderArchiveFolderContents(folderId) {
     h += "</div>";
   } else {
     h +=
-      '<table class="doc-table"><thead><tr><th>Reference</th><th>Subject</th><th>Archived Date</th><th>Status</th><th style="text-align:right">Actions</th></tr></thead><tbody>';
+      '<table class="doc-table"><thead><tr><th>Reference</th><th>Subject</th><th>Archived Date</th><th>Status</th><th>Actions</th></tr></thead><tbody>';
     docsInFolder.forEach(function (d) {
       h +=
         '<tr><td style="font-family:monospace;font-weight:600">' +
@@ -5690,11 +5884,13 @@ function updateAutoEncodePreview() {
   var refEl = document.getElementById("preview-ref");
   var typeEl = document.getElementById("preview-type");
   var fromEl = document.getElementById("preview-from");
+  var divisionEl = document.getElementById("preview-division");
   var subEl = document.getElementById("preview-subject");
 
   if (refEl) refEl.textContent = nextRef;
   if (typeEl) typeEl.textContent = "OCR Scanned Document";
   if (fromEl) fromEl.textContent = currentUser.name;
+  if (divisionEl) divisionEl.textContent = currentUser.division || currentUser.roleLabel || "";
   if (subEl) subEl.textContent = "Document scanned on " + today;
 }
 
@@ -7358,4 +7554,205 @@ if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", ensureResponsiveConsistency);
 } else {
   ensureResponsiveConsistency();
+}
+
+/* ==========================================================================
+   LATEST ANNOUNCEMENTS LOGIC
+   ========================================================================== */
+
+function getSortedAnnouncements() {
+  const todayStr = formatDateISO(new Date());
+  return announcements
+    .filter(function (ann) {
+      if (ann.expiryDate && ann.expiryDate < todayStr) return false;
+      return true;
+    })
+    .sort(function (a, b) {
+      if (a.pinned && !b.pinned) return -1;
+      if (!a.pinned && b.pinned) return 1;
+      return new Date(b.datePosted) - new Date(a.datePosted);
+    });
+}
+
+function renderLatestAnnouncementsList() {
+  var sorted = getSortedAnnouncements();
+  var latest = sorted.slice(0, 3);
+  var h = "";
+  if (latest.length === 0) {
+    h += '<div style="padding:1.5rem;text-align:center;color:var(--muted)">No active announcements.</div>';
+  } else {
+    h += '<div class="ann-widget-list">';
+    latest.forEach(function (ann) {
+      var badgeClass = "pill-gray";
+      if (ann.priority === "Urgent") badgeClass = "pill-red";
+      else if (ann.priority === "Important") badgeClass = "pill-amber";
+      else if (ann.priority === "Normal") badgeClass = "pill-blue";
+
+      var pinHtml = ann.pinned
+        ? '<span style="font-size:16px;flex-shrink:0;" title="Pinned">📌</span>'
+        : '';
+
+      h += '<div class="ann-widget-item" onclick="viewAnnouncementDetail(' + ann.id + ')">' +
+             '<div style="display:flex;align-items:center;gap:0.5rem;">' +
+               '<span class="ann-widget-item-title">' + escapeHtml(ann.title) + '</span>' +
+               '<span class="pill ' + badgeClass + '">' + escapeHtml(ann.priority) + '</span>' +
+               pinHtml +
+             '</div>' +
+             '<div class="ann-widget-item-meta">' +
+               '<span>By ' + escapeHtml(ann.postedBy) + '</span>' +
+               '<span>' + escapeHtml(ann.datePosted) + '</span>' +
+             '</div>' +
+           '</div>';
+    });
+    h += '</div>';
+  }
+  return h;
+}
+
+function renderAnnouncementsPage() {
+  var canCreate = ["admin", "rd", "ard", "oic", "dc"].includes(currentUser.role);
+  var html = '';
+  html += '<div class="page-toolbar" style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:0.75rem;align-items:center;margin-bottom:1rem;">';
+  html += '<div style="flex:1;max-width:50%;min-width:260px;">';
+  html += '<input id="announcement-page-search-input" placeholder="Search Announcements by title..." oninput="renderAnnouncementsPageList(this.value)" style="width:100%;padding:0.75rem 1rem;border:1.5px solid var(--border);border-radius:10px;background:#fff;color:var(--text);font-size:14px;outline:none;" />';
+  html += '</div>';
+  html += '<div style="display:flex;gap:0.5rem;flex-wrap:wrap;justify-content:flex-end;">';
+  if (canCreate) html += '<button class="btn-send" onclick="openCreateAnnouncementModal()">Create Announcement</button>';
+  html += '</div>';
+  html += '</div>';
+  html += '<div id="announcement-page-list"></div>';
+  return html;
+}
+
+function renderAnnouncementsPageList(query) {
+  var listEl = document.getElementById("announcement-page-list");
+  if (!listEl) return;
+  var sorted = getSortedAnnouncements();
+  if (query) {
+    query = query.toLowerCase().trim();
+    sorted = sorted.filter(function (ann) {
+      return ann.title.toLowerCase().indexOf(query) !== -1;
+    });
+  }
+  var h = "";
+  if (sorted.length === 0) {
+    h += '<div style="padding:2rem;text-align:center;color:var(--muted)">No announcements found.</div>';
+  } else {
+    h += '<div class="announcement-list">';
+    sorted.forEach(function (ann) {
+      var pin = ann.pinned ? '<span class="ann-pin-icon" title="Pinned">📌</span>' : "";
+      var badgeClass = "pill-gray";
+      if (ann.priority === "Urgent") badgeClass = "pill-red";
+      else if (ann.priority === "Important") badgeClass = "pill-amber";
+      else if (ann.priority === "Normal") badgeClass = "pill-blue";
+      var contentPreview = escapeHtml(ann.content || "");
+      if (contentPreview.length > 80) contentPreview = contentPreview.substring(0, 80) + '...';
+
+      h += '<div class="announcement-item" onclick="viewAnnouncementDetail(' + ann.id + ')">' +
+             '<div class="ann-item-header">' +
+               '<span class="ann-item-title">' + pin + escapeHtml(ann.title) + '</span>' +
+               '<span class="pill ' + badgeClass + '">' + escapeHtml(ann.priority) + '</span>' +
+             '</div>' +
+             '<div class="ann-item-meta">' +
+               '<span>By ' + escapeHtml(ann.postedBy) + '</span>' +
+               '<span>' + escapeHtml(ann.datePosted) + '</span>' +
+             '</div>' +
+           '</div>';
+    });
+    h += '</div>';
+  }
+  listEl.innerHTML = h;
+}
+
+
+function openCreateAnnouncementModal() {
+  // Clear fields
+  document.getElementById("new-ann-title").value = "";
+  document.getElementById("new-ann-content").value = "";
+  document.getElementById("new-ann-priority").value = "Normal";
+  document.getElementById("new-ann-expiry").value = "";
+  document.getElementById("new-ann-pinned").checked = false;
+  
+  document.getElementById("create-announcement-modal").classList.add("open");
+  document.body.classList.add("modal-open");
+}
+
+function closeCreateAnnouncementModal() {
+  document.getElementById("create-announcement-modal").classList.remove("open");
+  document.body.classList.remove("modal-open");
+}
+
+function publishAnnouncement() {
+  var title = (document.getElementById("new-ann-title").value || "").trim();
+  var content = (document.getElementById("new-ann-content").value || "").trim();
+  var priority = document.getElementById("new-ann-priority").value;
+  var expiry = document.getElementById("new-ann-expiry").value;
+  var pinned = document.getElementById("new-ann-pinned").checked;
+  
+  if (!title) {
+    showError("Announcement Title is required.");
+    return;
+  }
+  if (!content) {
+    showError("Announcement Content is required.");
+    return;
+  }
+  
+  var postedBy = currentUser.roleLabel;
+  if (currentUser.role === "admin") postedBy = "System Administrator";
+  
+  var newId = announcements.length > 0 ? Math.max.apply(null, announcements.map(function(o) { return o.id; })) + 1 : 1;
+  
+  var newAnn = {
+    id: newId,
+    title: title,
+    content: content,
+    postedBy: postedBy,
+    priority: priority,
+    pinned: pinned,
+    datePosted: formatDateISO(new Date())
+  };
+  
+  if (expiry) {
+    newAnn.expiryDate = expiry;
+  }
+  
+  announcements.push(newAnn);
+  showSuccess("Announcement published successfully.");
+  closeCreateAnnouncementModal();
+  
+  // Refresh the dashboard if currently on it
+  if (currentPage === "dashboard") {
+    showPage("dashboard");
+  }
+}
+
+
+function viewAnnouncementDetail(id) {
+  var ann = announcements.find(function(a) { return a.id === id; });
+  if (!ann) return;
+  
+  document.getElementById("detail-ann-title").textContent = ann.title;
+  document.getElementById("detail-ann-content").textContent = ann.content;
+  document.getElementById("detail-ann-date").textContent = "Posted on: " + ann.datePosted;
+  document.getElementById("detail-ann-postedby").textContent = "By: " + ann.postedBy;
+  
+  var badgeContainer = document.getElementById("detail-ann-priority-badge");
+  var badgeClass = "pill-gray";
+  if (ann.priority === "Urgent") badgeClass = "pill-red";
+  else if (ann.priority === "Important") badgeClass = "pill-amber";
+  else if (ann.priority === "Normal") badgeClass = "pill-blue";
+  badgeContainer.innerHTML = '<span class="pill ' + badgeClass + '">' + escapeHtml(ann.priority) + '</span>';
+  
+  var pinnedContainer = document.getElementById("detail-ann-pinned-status");
+  pinnedContainer.textContent = ann.pinned ? "📌 Pinned Announcement" : "";
+  
+  // Open the detail modal
+  document.getElementById("announcement-detail-modal").classList.add("open");
+  document.body.classList.add("modal-open");
+}
+
+function closeAnnouncementDetailModal() {
+  document.getElementById("announcement-detail-modal").classList.remove("open");
+  document.body.classList.remove("modal-open");
 }
