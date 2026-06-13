@@ -672,6 +672,30 @@ body {
 .sidebar.collapsed .sb-item {
   justify-content: center;
   padding: 0.55rem 0;
+  position: relative;
+}
+
+.sidebar.collapsed .sb-item::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: 70px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: var(--navy2);
+  color: #fff;
+  padding: 0.4rem 0.8rem;
+  border-radius: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  z-index: 100;
+}
+
+.sidebar.collapsed .sb-item:hover::after {
+  opacity: 1;
 }
 
 .sidebar.collapsed .sb-icon {
