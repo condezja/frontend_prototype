@@ -189,7 +189,7 @@ function showConfirmDialog(opts) {
       ? variant
       : "neutral";
 
-  var glyphs = { danger: "⚠", warning: "📦", neutral: "↩" };
+  var glyphs = { danger: "⚠", warning: "📦", neutral: "👤" };
   var glyph = glyphs[safeVariant] || glyphs.neutral;
 
   return new Promise(function (resolve) {
@@ -1164,11 +1164,118 @@ var DOCS = [
 ];
 
 // Document tracking functions
-function updateDocumentTracking(ref, action, user = currentUser.name) {
+// Document tracking functions
+function ensureTrail(doc) {
+  if (!doc) return;
+  if (!doc.tracking) {
+    doc.tracking = {
+      lastActor: "",
+      lastUpdated: new Date().toISOString(),
+      trail: []
+    };
+  }
+  if (!doc.tracking.trail) {
+    doc.tracking.trail = [];
+  }
+  if (doc.tracking.trail.length === 0) {
+    var baseDate = doc.date || formatDateISO(new Date());
+    var t0 = baseDate + "T08:30:00Z";
+    var t1 = baseDate + "T09:15:00Z";
+    var t2 = baseDate + "T11:45:00Z";
+    var t3 = baseDate + "T14:30:00Z";
+    var t4 = baseDate + "T16:00:00Z";
+
+    doc.tracking.trail.push({
+      user: doc.from || "Sender",
+      action: "Created",
+      timestamp: t0
+    });
+
+    var status = doc.status || "";
+    if (status === "For ARD Clearance") {
+      doc.tracking.trail.push({
+        user: "ORD",
+        action: "Received",
+        timestamp: t1
+      });
+    } else if (status === "For RD Approval") {
+      doc.tracking.trail.push({
+        user: "ORD",
+        action: "Received",
+        timestamp: t1
+      });
+      doc.tracking.trail.push({
+        user: "ARD",
+        action: "Cleared",
+        timestamp: t2
+      });
+    } else if (status === "Approved") {
+      doc.tracking.trail.push({
+        user: "ORD",
+        action: "Received",
+        timestamp: t1
+      });
+      doc.tracking.trail.push({
+        user: "ARD",
+        action: "Cleared",
+        timestamp: t2
+      });
+      doc.tracking.trail.push({
+        user: "RD",
+        action: "Approved",
+        timestamp: t3
+      });
+    } else if (status === "Released" || status === "Archived" || status === "Disposed") {
+      doc.tracking.trail.push({
+        user: "ORD",
+        action: "Received",
+        timestamp: t1
+      });
+      doc.tracking.trail.push({
+        user: "ARD",
+        action: "Cleared",
+        timestamp: t2
+      });
+      doc.tracking.trail.push({
+        user: "RD",
+        action: "Approved",
+        timestamp: t3
+      });
+      doc.tracking.trail.push({
+        user: "ORD",
+        action: "Released",
+        timestamp: t4
+      });
+      if (status === "Archived") {
+        doc.tracking.trail.push({
+          user: doc.archivedBy || "Archive",
+          action: "Archived",
+          timestamp: (doc.archivedDate ? doc.archivedDate + "T16:30:00Z" : t4)
+        });
+      } else if (status === "Disposed") {
+        doc.tracking.trail.push({
+          user: doc.disposalProcessedBy || "Disposal",
+          action: "Disposed",
+          timestamp: (doc.disposalProcessedDate ? doc.disposalProcessedDate + "T16:30:00Z" : t4)
+        });
+      }
+    } else {
+      doc.tracking.trail.push({
+        user: "ORD",
+        action: "Received",
+        timestamp: t1
+      });
+    }
+  }
+}
+
+function updateDocumentTracking(ref, action, user) {
+  user = user || (currentUser ? currentUser.name : "System");
   var doc = DOCS.find(function (d) {
     return d.ref === ref;
   });
-  if (doc && doc.tracking) {
+  if (doc) {
+    ensureTrail(doc);
     // Add new trail entry
     var trailEntry = {
       user: user,
@@ -1178,6 +1285,7 @@ function updateDocumentTracking(ref, action, user = currentUser.name) {
 
     doc.tracking.trail.push(trailEntry);
     doc.tracking.lastUpdated = new Date().toISOString();
+    doc.tracking.lastActor = currentUser ? currentUser.role : "";
     doc.tracking.updatedBy = user;
 
     // Update status based on action
@@ -1323,13 +1431,13 @@ function getNav() {
         item.text = "Division Dashboard";
       if (item.page === "dashboard" && r === "staff")
         item.text = "My Dashboard";
-      if (item.page === "incoming" && r === "rd")
+      if (item.page === "pending-docs" && r === "rd")
         item.text = "Pending/For Approval";
-      if (item.page === "incoming" && (r === "ard" || r === "oic"))
+      if (item.page === "pending-docs" && (r === "ard" || r === "oic"))
         item.text = "Pending/For Clearance";
-      if (item.page === "incoming" && r === "dc")
+      if (item.page === "pending-docs" && r === "dc")
         item.text = "For Clearance/Pending";
-      if (item.page === "incoming" && r === "staff")
+      if (item.page === "pending-docs" && r === "staff")
         item.text = "Assigned to Me";
       if (item.page === "outgoing" && (r === "ard" || r === "oic"))
         item.text = "For RD Routing";
@@ -1358,12 +1466,39 @@ function showScreen(id) {
     .forEach((s) => s.classList.remove("active"));
   document.getElementById(id).classList.add("active");
 }
+
+function prepareLogin(role) {
+  var user = USERS[role];
+  if (!user) return;
+  
+  var emailInput = document.getElementById("login-email");
+  var passInput = document.getElementById("login-pass");
+  
+  if (emailInput) emailInput.value = user.email || "";
+  if (passInput) passInput.value = "password";
+  
+  // Optional highlight to draw attention to the form
+  var authCard = document.querySelector(".auth-card");
+  if (authCard) {
+    authCard.style.transition = "transform 0.3s, box-shadow 0.3s";
+    authCard.style.transform = "scale(1.02)";
+    authCard.style.boxShadow = "0 12px 30px rgba(15, 42, 86, 0.2)";
+    
+    // Smooth scroll to the top form area just in case it's off-screen on smaller monitors
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    
+    setTimeout(function() {
+      authCard.style.transform = "scale(1)";
+      authCard.style.boxShadow = "";
+    }, 500);
+  }
+}
 function loginAs(role) {
   showLoading(true);
   currentUser = Object.assign({}, USERS[role]);
-  
+
   // Sync with USER_ACCOUNTS to get OIC approval and other account details
-  var accountData = USER_ACCOUNTS.find(function(u) {
+  var accountData = USER_ACCOUNTS.find(function (u) {
     return u.email === currentUser.email || u.name === currentUser.name;
   });
   if (accountData) {
@@ -1377,7 +1512,7 @@ function loginAs(role) {
       features: accountData.features
     });
   }
-  
+
   showApp();
 
   showLoading(false);
@@ -1478,9 +1613,9 @@ function doLogin() {
 
   showLoading(true);
 
-  setTimeout(function() {
+  setTimeout(function () {
     // Find matching account
-    var acct = USER_ACCOUNTS.find(function(u) {
+    var acct = USER_ACCOUNTS.find(function (u) {
       return u.email && u.email.toLowerCase() === emailInput.toLowerCase();
     });
 
@@ -1531,6 +1666,56 @@ function doLogin() {
     showSuccess("Welcome back, " + currentUser.name + ".");
   }, 400);
 }
+
+function sendPasswordReset() {
+  var emailInput = ((document.getElementById("forgot-email") || {}).value || "").trim();
+
+  // Basic field validation
+  if (!emailInput) {
+    showError("Please enter your email address.");
+    return;
+  }
+
+  showLoading(true);
+
+  setTimeout(function () {
+    // Find matching account
+    var acct = USER_ACCOUNTS.find(function (u) {
+      return u.email && u.email.toLowerCase() === emailInput.toLowerCase();
+    });
+
+    // Email not found
+    if (!acct) {
+      showLoading(false);
+      showError("No account found with that email address.");
+      return;
+    }
+
+    // Account not yet active
+    if (acct.status === "Pending") {
+      showLoading(false);
+      showError("Your account is pending administrator approval. Password reset is not available yet.");
+      return;
+    }
+
+    if (acct.status === "Deactivated") {
+      showLoading(false);
+      showError("Your account has been deactivated. Please contact your administrator.");
+      return;
+    }
+
+    // Success - show confirmation
+    showLoading(false);
+    showSuccess("Password reset instructions have been sent to " + emailInput);
+
+    // Clear the input and go back to sign in after a moment
+    setTimeout(function () {
+      document.getElementById("forgot-email").value = "";
+      showScreen("screen-signin");
+    }, 2000);
+  }, 500);
+}
+
 var originalUserState = null;
 
 function toggleOICDuty(designation) {
@@ -1576,10 +1761,10 @@ function toggleOICDuty(designation) {
       currentUser.funcAccess = "Clearance";
       currentUser.features = getFeaturesForRole("oic");
     }
-    
+
     // Show custom OIC duty fade effect (use specific gradient/message)
     showOICDutyFade(true, designation);
-    setTimeout(function() {
+    setTimeout(function () {
       showApp();
       showOICDutyFade(false);
       showSuccess("You have assumed " + currentUser.roleLabel + " duty.");
@@ -1876,12 +2061,23 @@ function renderRecipientDirectory() {
     .join("");
 }
 function doLogout() {
-  showLoading(true);
-  originalUserState = null;
-  setTimeout(() => {
-    showScreen("screen-signin");
-    showLoading(false);
-  }, 500);
+  showConfirmDialog({
+    title: "Sign Out",
+    message: "Are you sure you want to sign out?",
+    detail: "You will need to sign in again to access your account.",
+    confirmLabel: "Sign Out",
+    cancelLabel: "Cancel",
+    variant: "neutral"
+  }).then(function (confirmed) {
+    if (confirmed) {
+      showLoading(true);
+      originalUserState = null;
+      setTimeout(() => {
+        showScreen("screen-signin");
+        showLoading(false);
+      }, 500);
+    }
+  });
 }
 
 function renderNav() {
@@ -2008,8 +2204,10 @@ function renderPageHeader(title) {
 
 function statusPill(s) {
   if (s === "Archived") return '<span class="pill pill-gray">Archived</span>';
-  if (s === "Approved" || s === "Released")
+  if (s === "Approved")
     return '<span class="pill pill-green">' + s + "</span>";
+  if (s === "Released")
+    return '<span class="pill pill-purple">' + s + "</span>";
   if (s === "For RD Approval" || s === "For ARD Clearance")
     return '<span class="pill pill-amber">' + s + "</span>";
   if (s === "Rejected") return '<span class="pill pill-red">' + s + "</span>";
@@ -2304,7 +2502,7 @@ function renderActionsMenu(ref, editFn) {
     "','" +
     ef +
     "')\">" +
-    '<option value="">Options</option>' +
+    '<option value="" disabled selected hidden>Options</option>' +
     '<option value="view">View</option>' +
     '<option value="edit">Edit</option>' +
     '<option value="send">Send</option>' +
@@ -2363,7 +2561,7 @@ function renderDashboard() {
     '</span>' +
     "</div></div>";
   h +=
-    '<div style="text-align:right"><div style="font-size:13px;color:rgba(255,255,255,.5)">Today</div><div style="font-size:18px;font-weight:600">May 14, 2026</div><div style="font-size:12px;color:rgba(255,255,255,.5);margin-top:.25rem">Reference: 2026-05-</div></div>';
+    '<div style="text-align:right"><div style="font-size:13px;color:rgba(255,255,255,.5)">Today</div><div style="font-size:18px;font-weight:600">May 14, 2026</div></div>';
   h += "</div>";
 
   h += '<div class="stats-row">';
@@ -2801,13 +2999,14 @@ function renderLogbook() {
     var h =
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem">';
     h += '<div style="display:flex;align-items:center;gap:1rem;">';
-    h += '<button class="btn-sm" onclick="backToMainLogbook()">← Back</button>';
     h +=
       '<div style="font-size:18px;font-weight:600;color:var(--navy);">Divisions Logbook</div>';
     h += "</div>";
     h +=
       '<div style="display:flex;gap:.5rem"><button class="btn-sm" onclick="openManualLogbook()">✍️ Manual Logbook</button><button class="btn-sm" onclick="window.print()">🖨️ Print</button><button class="btn-sm" onclick="exportLogbookCSV()">⬇️ Export CSV</button></div>';
     h += "</div>";
+
+    h += renderSimpleLogbookNavigation();
 
     h += renderDivisionFolders();
     return h;
@@ -2889,7 +3088,7 @@ function renderSimpleLogbookNavigation() {
     if (r === "admin") {
       h +=
         '<button class="nav-btn ' +
-        (currentLogbookView === "divisions" ? "active" : "") +
+        ((currentLogbookView === "divisions" || currentLogbookView === "division") ? "active" : "") +
         '" onclick="openDivisionsLogbook()">📁 Divisions Logbook</button>';
       h +=
         '<button class="nav-btn ' +
@@ -2902,7 +3101,7 @@ function renderSimpleLogbookNavigation() {
     } else if (r === "rd") {
       h +=
         '<button class="nav-btn ' +
-        (currentLogbookView === "divisions" ? "active" : "") +
+        ((currentLogbookView === "divisions" || currentLogbookView === "division") ? "active" : "") +
         '" onclick="openDivisionsLogbook()">📁 Divisions Logbook</button>';
       h +=
         '<button class="nav-btn ' +
@@ -2915,7 +3114,7 @@ function renderSimpleLogbookNavigation() {
     } else {
       h +=
         '<button class="nav-btn ' +
-        (currentLogbookView === "divisions" ? "active" : "") +
+        ((currentLogbookView === "divisions" || currentLogbookView === "division") ? "active" : "") +
         '" onclick="openDivisionsLogbook()">📁 Divisions Logbook</button>';
       h +=
         '<button class="nav-btn ' +
@@ -3025,11 +3224,9 @@ function renderDivisionLogbook(divisionName) {
     return (d.division || "ORD") === divisionName;
   });
 
-  // Header with back button
   h +=
     '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem">';
   h += '<div style="display:flex;align-items:center;gap:1rem;">';
-  h += '<button class="btn-sm" onclick="backToGlobalLogbook()">← Back</button>';
   h +=
     '<div style="font-size:18px;font-weight:600;color:var(--navy);">' +
     divisionName +
@@ -3038,6 +3235,8 @@ function renderDivisionLogbook(divisionName) {
   h +=
     '<div style="display:flex;gap:.5rem"><button class="btn-sm" onclick="openManualLogbook()">✍️ Manual Logbook</button><button class="btn-sm" onclick="window.print()">🖨️ Print</button><button class="btn-sm" onclick="exportLogbookCSV()">⬇️ Export CSV</button></div>';
   h += "</div>";
+
+  h += renderSimpleLogbookNavigation();
 
   h +=
     '<div style="font-size:12px;color:var(--muted);margin:-.5rem 0 1rem 0">Showing ' +
@@ -3108,11 +3307,9 @@ function renderUserLogbook(userRole, userName) {
   var h = "";
   var userDocs = getUserLogbookDocs(userRole);
 
-  // Header with back button
   h +=
     '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem">';
   h += '<div style="display:flex;align-items:center;gap:1rem;">';
-  h += '<button class="btn-sm" onclick="backToMainLogbook()">← Back</button>';
   h +=
     '<div style="font-size:18px;font-weight:600;color:var(--navy);">' +
     userName +
@@ -3121,6 +3318,8 @@ function renderUserLogbook(userRole, userName) {
   h +=
     '<div style="display:flex;gap:.5rem"><button class="btn-sm" onclick="openManualLogbook()">✍️ Manual Logbook</button><button class="btn-sm" onclick="window.print()">🖨️ Print</button><button class="btn-sm" onclick="exportLogbookCSV()">⬇️ Export CSV</button></div>';
   h += "</div>";
+
+  h += renderSimpleLogbookNavigation();
 
   h +=
     '<div style="font-size:12px;color:var(--muted);margin:-.5rem 0 1rem 0">Showing ' +
@@ -3444,6 +3643,7 @@ var USER_ACCOUNTS = [
       "incoming",
       "outgoing",
       "pending-docs",
+      "pending-docs",
       "approved",
       "logbook",
       "search",
@@ -3469,7 +3669,7 @@ var USER_ACCOUNTS = [
       "dashboard",
       "incoming",
       "outgoing",
-      "approved",
+      "pending-docs","approved",
       "logbook",
       "search",
       "archive",
@@ -3493,7 +3693,7 @@ var USER_ACCOUNTS = [
       "dashboard",
       "incoming",
       "outgoing",
-      "approved",
+      "pending-docs","approved",
       "logbook",
       "search",
       "archive",
@@ -3519,7 +3719,7 @@ var USER_ACCOUNTS = [
       "dashboard",
       "incoming",
       "outgoing",
-      "logbook",
+      "pending-docs","logbook",
       "users",
       "notifications",
       "announcements",
@@ -3540,7 +3740,7 @@ var USER_ACCOUNTS = [
       "dashboard",
       "incoming",
       "outgoing",
-      "logbook",
+      "pending-docs","logbook",
       "search",
       "archive",
       "users",
@@ -3563,7 +3763,7 @@ var USER_ACCOUNTS = [
       "dashboard",
       "incoming",
       "outgoing",
-      "logbook",
+      "pending-docs","logbook",
       "notifications",
       "announcements",
       "enhanced-reports",
@@ -3583,7 +3783,7 @@ var USER_ACCOUNTS = [
       "dashboard",
       "incoming",
       "outgoing",
-      "logbook",
+      "pending-docs","logbook",
       "notifications",
       "announcements",
       "enhanced-reports",
@@ -3598,7 +3798,7 @@ function getFeaturesForRole(role) {
       "dashboard",
       "incoming",
       "outgoing",
-      "logbook",
+      "pending-docs","logbook",
       "search",
       "archive",
       "users",
@@ -3616,7 +3816,7 @@ function getFeaturesForRole(role) {
       "dashboard",
       "incoming",
       "outgoing",
-      "logbook",
+      "pending-docs","logbook",
       "users",
       "notifications",
       "announcements",
@@ -3627,7 +3827,7 @@ function getFeaturesForRole(role) {
       "dashboard",
       "incoming",
       "outgoing",
-      "logbook",
+      "pending-docs","logbook",
       "search",
       "archive",
       "users",
@@ -3639,7 +3839,7 @@ function getFeaturesForRole(role) {
     "dashboard",
     "incoming",
     "outgoing",
-    "logbook",
+      "pending-docs","logbook",
     "notifications",
     "announcements",
     "enhanced-reports",
@@ -4115,6 +4315,7 @@ function renderUserManagementModals() {
       { id: "dashboard", label: "Dashboard" },
       { id: "incoming", label: "Incoming Documents" },
       { id: "outgoing", label: "Outgoing Documents" },
+      { id: "pending-docs", label: "Pending Documents" },
       { id: "approved", label: "Approved Documents" },
       { id: "logbook", label: "Document Logbook" },
       { id: "search", label: "Document Search" },
@@ -4327,7 +4528,7 @@ function openAccountSettings() {
     '<div style="font-size:12px;color:var(--muted);margin-top:.4rem">Username/email cannot be changed in this prototype. Password reset choice is UI-only.</div>' +
     "</div>" +
     "</div>" +
-    '<div id="um-acct-notice" style="font-size:12px;color:var(--muted);margin-top:.5rem"></div>' +
+    '<div id="um-acct-notice" style="display:none;margin-top:1rem;padding:0.75rem 1rem;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;color:#dc2626;font-size:13px;font-weight:500;"></div>' +
     '<div class="modal-footer">' +
     '<button class="btn-sec" onclick="closeAccountSettings()">Cancel</button>' +
     '<button class="btn-send" onclick="saveAccountSettings()">Save Changes</button>' +
@@ -4380,6 +4581,14 @@ function handleAccountProfilePic(input) {
 function setAccountPassMode(mode) {
   var wrap = document.getElementById("um-pass-manual-wrap");
   if (!wrap) return;
+
+  // Clear error message when switching modes
+  var noticeEl = document.getElementById("um-acct-notice");
+  if (noticeEl) {
+    noticeEl.textContent = "";
+    noticeEl.style.display = "none";
+  }
+
   if (mode === "passwordless") {
     wrap.style.display = "none";
   } else {
@@ -4395,6 +4604,7 @@ function saveAccountSettings() {
   var nameEl = document.getElementById("um-acct-profile-name");
   var newName = (nameEl && nameEl.value ? nameEl.value : "").trim();
   if (!newName) {
+    showError("Please enter your name.");
     return;
   }
 
@@ -4402,15 +4612,19 @@ function saveAccountSettings() {
   var passMode = modeEl ? modeEl.value : "manual";
 
   var noticeEl = document.getElementById("um-acct-notice");
-  if (noticeEl) noticeEl.textContent = "";
+  if (noticeEl) {
+    noticeEl.textContent = "";
+    noticeEl.style.display = "none";
+  }
 
   if (passMode === "manual") {
     var newPassEl = document.getElementById("um-acct-new-password");
     var newPass = (newPassEl && newPassEl.value ? newPassEl.value : "").trim();
     if (!newPass) {
-      if (noticeEl)
-        noticeEl.textContent =
-          "Please enter a new password (or choose passwordless login).";
+      if (noticeEl) {
+        noticeEl.textContent = "⚠️ Please enter a new password (or choose passwordless login).";
+        noticeEl.style.display = "block";
+      }
       return;
     }
     ACCOUNT_SECURITY_META[key] = {
@@ -4425,12 +4639,15 @@ function saveAccountSettings() {
     };
   }
 
+  // Update currentUser
+  var oldName = currentUser.name;
   currentUser.name = newName;
   currentUser.initial = (newName[0] || "U").toUpperCase();
 
+  // Update profile picture
   PROFILE_PICS[key] = pendingProfilePicDataUrl || PROFILE_PICS[key] || "";
 
-  // Update USERS entry so recipient dropdown shows the latest name.
+  // Update USERS entry so recipient dropdown shows the latest name
   Object.keys(USERS).forEach(function (k) {
     if (USERS[k].role === currentUser.role) {
       USERS[k].name = newName;
@@ -4438,9 +4655,48 @@ function saveAccountSettings() {
     }
   });
 
-  // Update display immediately
-  showApp();
+  // Update USER_ACCOUNTS array
+  var userAccount = USER_ACCOUNTS.find(function (u) {
+    return u.id === currentUser.id || u.email === currentUser.email;
+  });
+  if (userAccount) {
+    userAccount.name = newName;
+    if (passMode === "manual") {
+      userAccount.tempPassword = ACCOUNT_SECURITY_META[key].tempPassword;
+      userAccount.passwordMode = "required";
+    } else {
+      userAccount.passwordMode = "passwordless";
+      userAccount.tempPassword = "";
+    }
+  }
+
+  // Update sidebar display immediately
+  var sbName = document.getElementById("sb-name");
+  var sbAvatar = document.getElementById("sb-avatar");
+  if (sbName) sbName.textContent = newName;
+  if (sbAvatar) {
+    if (PROFILE_PICS[key]) {
+      sbAvatar.style.backgroundImage = "url('" + PROFILE_PICS[key] + "')";
+      sbAvatar.style.backgroundSize = "cover";
+      sbAvatar.style.backgroundPosition = "center";
+      sbAvatar.textContent = "";
+    } else {
+      sbAvatar.style.backgroundImage = "none";
+      sbAvatar.textContent = currentUser.initial;
+    }
+  }
+
+  // Close modal first
   closeAccountSettings();
+
+  // Show success message and refresh dashboard to show the changes
+  setTimeout(function () {
+    showSuccess("Profile updated successfully!");
+    showPage("dashboard");
+  }, 100);
+
+  // Log the change for debugging
+  console.log("Profile updated: " + oldName + " → " + newName);
 }
 
 function renderSearch() {
@@ -4449,14 +4705,14 @@ function renderSearch() {
   // Collect unique types and divisions from visible docs
   var types = ["All types"];
   var divisions = ["All divisions"];
-  visibleDocs.forEach(function(d) {
+  visibleDocs.forEach(function (d) {
     if (d.type && !types.includes(d.type)) types.push(d.type);
     if (d.division && !divisions.includes(d.division)) divisions.push(d.division);
   });
   types.sort();
   divisions.sort();
 
-  var typeOptions = types.map(function(t) {
+  var typeOptions = types.map(function (t) {
     return '<option value="' + escapeHtml(t) + '">' + escapeHtml(t) + '</option>';
   }).join("");
 
@@ -4467,11 +4723,11 @@ function renderSearch() {
     "Approved",
     "Released",
     "Archived",
-  ].map(function(s) {
+  ].map(function (s) {
     return '<option value="' + escapeHtml(s) + '">' + escapeHtml(s) + '</option>';
   }).join("");
 
-  var divisionOptions = divisions.map(function(d) {
+  var divisionOptions = divisions.map(function (d) {
     return '<option value="' + escapeHtml(d) + '">' + escapeHtml(d) + '</option>';
   }).join("");
 
@@ -4524,7 +4780,7 @@ function buildSearchRows(docs) {
       '<div style="font-size:12px">Try adjusting your search filters</div>' +
       '</td></tr>';
   }
-  return docs.map(function(d) {
+  return docs.map(function (d) {
     var divFull = d.division || "";
     var divAbbrev = divFull ? getDivisionAbbrev(divFull) : "—";
     var conf = d.conf ? '<span class="pill pill-red" style="margin-left:4px;font-size:9px">Conf.</span>' : "";
@@ -4552,7 +4808,7 @@ function executeSearch() {
 
   var visibleDocs = getVisibleDocumentsForRole();
 
-  var results = visibleDocs.filter(function(d) {
+  var results = visibleDocs.filter(function (d) {
     // Keyword — match ref, subject, from, to
     if (keyword) {
       var haystack = [d.ref, d.subject, d.from, d.to, d.type, d.division]
@@ -4582,7 +4838,7 @@ function executeSearch() {
 
 function clearSearch() {
   var fields = ["search-keyword", "search-type", "search-status", "search-kind", "search-division"];
-  fields.forEach(function(id) {
+  fields.forEach(function (id) {
     var el = document.getElementById(id);
     if (!el) return;
     if (el.tagName === "INPUT") el.value = "";
@@ -4656,7 +4912,7 @@ function renderReports() {
 function renderArchiveActionsMenu(ref, mode) {
   // mode: "archived" | "released"
   var allowArchive = mode === "released";
-  var options = '<option value="">Options</option>';
+  var options = '<option value="" disabled selected hidden>Options</option>';
   options += '<option value="view">View</option>';
   options += '<option value="print">Print</option>';
   if (allowArchive) options += '<option value="archive">Archive</option>';
@@ -4848,6 +5104,17 @@ function archiveDocument(ref) {
     d.archivedBy = currentUser.name;
     d.archivedDate = formatDateISO(new Date());
     d.archiveFolder = d.archiveFolder || "default";
+
+    ensureTrail(d);
+    d.tracking.trail.push({
+      user: currentUser.name,
+      action: "Archived",
+      timestamp: new Date().toISOString(),
+    });
+    d.tracking.lastUpdated = new Date().toISOString();
+    d.tracking.lastActor = currentUser.role;
+    d.tracking.updatedBy = currentUser.name;
+
     showSuccess("Document " + ref + " archived.");
     showPage("archive");
   });
@@ -4876,6 +5143,17 @@ function unarchiveDocument(ref) {
     d.status = "Released";
     delete d.archivedBy;
     delete d.archivedDate;
+
+    ensureTrail(d);
+    d.tracking.trail.push({
+      user: currentUser.name,
+      action: "Released",
+      timestamp: new Date().toISOString(),
+    });
+    d.tracking.lastUpdated = new Date().toISOString();
+    d.tracking.lastActor = currentUser.role;
+    d.tracking.updatedBy = currentUser.name;
+
     showSuccess("Document " + ref + " restored to Released.");
     showPage("archive");
   });
@@ -5237,7 +5515,7 @@ function viewDoc(ref) {
 
   if (trail && trail.length > 0) {
     // Render from actual trail data
-    trail.forEach(function(entry, idx) {
+    trail.forEach(function (entry, idx) {
       var isLast = idx === trail.length - 1;
       var ts = entry.timestamp ? formatTrailTimestamp(entry.timestamp) : "—";
       var actionIcon = getTrailActionIcon(entry.action);
@@ -5252,7 +5530,7 @@ function viewDoc(ref) {
   } else {
     // No trail data — generate a minimal trail from the document's own data
     var syntheticTrail = buildSyntheticTrail(d);
-    syntheticTrail.forEach(function(entry) {
+    syntheticTrail.forEach(function (entry) {
       html += tlItem(entry.done, entry.label, entry.time);
     });
   }
@@ -5262,14 +5540,37 @@ function viewDoc(ref) {
   // ── Action buttons ───────────────────────────────────────────────────────
   html += '<div style="display:flex;gap:.5rem;flex-wrap:wrap;border-top:1px solid var(--border);padding-top:1rem;margin-top:1rem">';
 
-  var canApprove = ["rd", "ard", "admin"].includes(currentUser.role);
-  var canApproveOnly = ["dc", "oic"].includes(currentUser.role);
+  var canESign = false;
+  var canApprove = false;
+  var canClear = false;
+  var canRelease = false;
 
+  if (d.status === "Approved") {
+    canRelease = currentUser.role === "admin";
+  } else if (d.status === "For RD Approval") {
+    canESign = canApprove = (["rd", "admin"].includes(currentUser.role) ||
+      (currentUser.role === "oic" && currentUser.oicApproved));
+  } else if (d.status === "For ARD Clearance") {
+    canApprove = (["ard", "admin"].includes(currentUser.role) ||
+      (currentUser.role === "oic" && currentUser.oicApproved));
+  } else if (d.status === "For Division Clearance") {
+    canClear = (["dc", "admin"].includes(currentUser.role) &&
+      (d.division || "ORD") === currentUser.division);
+  }
+
+  if (canESign) {
+    html += '<button class="btn-sm primary" onclick="openESignModal(\'' + escapeHtml(d.ref) + '\')">🖋️ E-Sign</button>';
+  }
   if (canApprove) {
-    html += '<button class="btn-sm primary" onclick="openESignModal(\'' + escapeHtml(d.ref) + '\')">🖋️ E-Sign & Approve</button>';
-    html += '<button class="btn-sm" onclick="showInfo(\'Document returned for revision.\')">↩ Return</button>';
-  } else if (canApproveOnly) {
-    html += '<button class="btn-sm primary" onclick="showSuccess(\'Action recorded.\')">✔ Approve</button>';
+    html += '<button class="btn-sm primary" onclick="approveDocument(\'' + escapeHtml(d.ref) + '\')">✔ Approve</button>';
+  }
+  if (canClear) {
+    html += '<button class="btn-sm primary" onclick="approveDocument(\'' + escapeHtml(d.ref) + '\')">✔ Clear</button>';
+  }
+  if (canRelease) {
+    html += '<button class="btn-sm primary" onclick="approveDocument(\'' + escapeHtml(d.ref) + '\')">📤 Release</button>';
+  }
+  if (canESign || canApprove || canClear) {
     html += '<button class="btn-sm" onclick="showInfo(\'Document returned for revision.\')">↩ Return</button>';
   }
 
@@ -5289,10 +5590,12 @@ function formatTrailTimestamp(ts) {
     if (isNaN(d.getTime())) return ts;
     return d.toLocaleDateString("en-PH", { year: "numeric", month: "short", day: "numeric" }) +
       " · " + d.toLocaleTimeString("en-PH", { hour: "2-digit", minute: "2-digit" });
-  } catch(e) { return ts; }
+  } catch (e) { return ts; }
 }
 
 function getTrailActionIcon(action) {
+  if (action && action.indexOf("Sent") === 0) return "📤";
+  if (action && action.indexOf("Status changed") === 0) return "🔄";
   var icons = {
     "Created": "📝",
     "Sent": "📤",
@@ -5301,10 +5604,13 @@ function getTrailActionIcon(action) {
     "For RD Approval": "📋",
     "Cleared": "✅",
     "Approved": "✅",
+    "E-Signed": "🖋️",
     "E-Signed & Approved": "🖋️",
     "Released": "📬",
     "Archived": "🗄️",
     "Returned": "↩",
+    "Disposed": "🗑️",
+    "Edited details": "📝"
   };
   return icons[action] || "•";
 }
@@ -5321,30 +5627,34 @@ function getNextPendingStep(status) {
 function buildSyntheticTrail(d) {
   // Builds a minimal trail from status when no trail array exists
   var trail = [];
-  var date = d.date || "—";
+  var t0 = d.date ? formatTrailTimestamp(d.date + "T08:30:00") : "—";
+  var t1 = d.date ? formatTrailTimestamp(d.date + "T09:15:00") : "—";
+  var t2 = d.date ? formatTrailTimestamp(d.date + "T11:45:00") : "—";
+  var t3 = d.date ? formatTrailTimestamp(d.date + "T14:30:00") : "—";
+  var t4 = d.date ? formatTrailTimestamp(d.date + "T16:00:00") : "—";
 
-  trail.push({ done: true, label: "📝 <strong>" + escapeHtml(d.from || "Sender") + "</strong> — Created / Submitted", time: date });
+  trail.push({ done: true, label: "📝 <strong>" + escapeHtml(d.from || "Sender") + "</strong> — Created / Submitted", time: t0 });
 
   if (d.status === "For ARD Clearance") {
-    trail.push({ done: true, label: "📥 <strong>ORD</strong> — Received and logged", time: date });
+    trail.push({ done: true, label: "📥 <strong>ORD</strong> — Received and logged", time: t1 });
     trail.push({ done: false, label: "⏳ Awaiting ARD clearance", time: "Pending" });
   } else if (d.status === "For RD Approval") {
-    trail.push({ done: true, label: "📥 <strong>ORD</strong> — Received and logged", time: date });
-    trail.push({ done: true, label: "✅ <strong>ARD</strong> — Cleared and forwarded", time: date });
+    trail.push({ done: true, label: "📥 <strong>ORD</strong> — Received and logged", time: t1 });
+    trail.push({ done: true, label: "✅ <strong>ARD</strong> — Cleared and forwarded", time: t2 });
     trail.push({ done: false, label: "⏳ Awaiting RD approval", time: "Pending" });
   } else if (d.status === "Approved") {
-    trail.push({ done: true, label: "📥 <strong>ORD</strong> — Received and logged", time: date });
-    trail.push({ done: true, label: "✅ <strong>ARD</strong> — Cleared and forwarded", time: date });
-    trail.push({ done: true, label: "✅ <strong>RD</strong> — Approved", time: date });
+    trail.push({ done: true, label: "📥 <strong>ORD</strong> — Received and logged", time: t1 });
+    trail.push({ done: true, label: "✅ <strong>ARD</strong> — Cleared and forwarded", time: t2 });
+    trail.push({ done: true, label: "✅ <strong>RD</strong> — Approved", time: t3 });
     trail.push({ done: false, label: "⏳ Pending release", time: "Pending" });
   } else if (d.status === "Released") {
-    trail.push({ done: true, label: "📥 <strong>ORD</strong> — Received and logged", time: date });
-    trail.push({ done: true, label: "✅ <strong>ARD</strong> — Cleared and forwarded", time: date });
-    trail.push({ done: true, label: "✅ <strong>RD</strong> — Approved", time: date });
-    trail.push({ done: true, label: "📬 <strong>ORD</strong> — Released", time: date });
+    trail.push({ done: true, label: "📥 <strong>ORD</strong> — Received and logged", time: t1 });
+    trail.push({ done: true, label: "✅ <strong>ARD</strong> — Cleared and forwarded", time: t2 });
+    trail.push({ done: true, label: "✅ <strong>RD</strong> — Approved", time: t3 });
+    trail.push({ done: true, label: "📬 <strong>ORD</strong> — Released", time: t4 });
   } else if (d.status === "Archived") {
-    trail.push({ done: true, label: "📥 <strong>ORD</strong> — Received, approved, and released", time: date });
-    trail.push({ done: true, label: "🗄️ <strong>Archive</strong> — Document archived", time: date });
+    trail.push({ done: true, label: "📥 <strong>ORD</strong> — Received, approved, and released", time: t1 });
+    trail.push({ done: true, label: "🗄️ <strong>Archive</strong> — Document archived", time: t2 });
   } else {
     trail.push({ done: false, label: "⏳ " + escapeHtml(d.status || "In progress"), time: "Pending" });
   }
@@ -5426,12 +5736,12 @@ function openESignModal(ref) {
   modal.innerHTML = `
     <div class="modal" style="max-width: 500px;">
       <div class="modal-head">
-        <h3>E-Signature Approval</h3>
+        <h3>E-Signature</h3>
         <span class="modal-close" onclick="this.closest('.modal-overlay').remove()">✕</span>
       </div>
       <div class="modal-body" style="text-align: center; padding: 2rem;">
         <div style="margin-bottom: 1.5rem; font-size: 14px; color: var(--muted);">
-          You are about to digitally sign and approve document:
+          You are about to digitally sign document:
           <div style="font-weight: 700; color: var(--navy); margin-top: 0.5rem; font-size: 16px;">${d.ref}</div>
           <div style="font-style: italic; margin-top: 0.25rem;">"${d.subject}"</div>
         </div>
@@ -5453,7 +5763,7 @@ function openESignModal(ref) {
       </div>
       <div class="modal-footer">
         <button class="btn-sec" onclick="this.closest('.modal-overlay').remove()">Cancel</button>
-        <button class="btn-send" onclick="confirmESign('${ref}')">Sign & Approve</button>
+        <button class="btn-send" onclick="confirmESign('${ref}')">Sign</button>
       </div>
     </div>
   `;
@@ -5469,7 +5779,6 @@ function confirmESign(ref) {
 
   var d = getDocByRef(ref);
   if (d) {
-    d.status = "Approved";
     d.esignature = {
       signedBy: currentUser.name,
       role: currentUser.roleLabel,
@@ -5477,23 +5786,87 @@ function confirmESign(ref) {
     };
 
     // Update tracking
-    if (d.tracking) {
-      d.tracking.trail.push({
-        user: currentUser.name,
-        action: "E-Signed & Approved",
-        timestamp: new Date().toISOString(),
-      });
-      d.tracking.lastUpdated = new Date().toISOString();
-      d.tracking.updatedBy = currentUser.name;
-    }
+    ensureTrail(d);
 
-    showSuccess("Document digitally signed and approved!");
+    d.tracking.trail.push({
+      user: currentUser.name,
+      action: "E-Signed & Approved",
+      timestamp: new Date().toISOString(),
+    });
+    d.tracking.lastUpdated = new Date().toISOString();
+    d.tracking.lastActor = currentUser.role;
+    d.tracking.updatedBy = currentUser.name;
+
+    showSuccess("Document digitally signed!");
     document.getElementById("esign-modal").remove();
 
     // Refresh view
-    if (currentPage === "dashboard") showPage("dashboard");
-    else viewDoc(ref);
+    viewDoc(ref);
   }
+}
+
+function approveDocument(ref) {
+  var d = getDocByRef(ref);
+  if (!d) return;
+
+  var newStatus;
+  var action;
+  var verb;
+
+  if (d.status === "Approved" && currentUser.role === "admin") {
+    newStatus = "Released";
+    action = "Released";
+    verb = "Release";
+  } else if (d.status === "For Division Clearance" && ["dc", "admin"].includes(currentUser.role)) {
+    newStatus = "For ARD Clearance";
+    action = "Cleared by Division";
+    verb = "Clear";
+  } else if (d.status === "For ARD Clearance" && ["ard", "admin", "oic"].includes(currentUser.role)) {
+    newStatus = "For RD Approval";
+    action = "Cleared";
+    verb = "Clear";
+  } else if (d.status === "For RD Approval" && ["rd", "admin", "oic"].includes(currentUser.role)) {
+    newStatus = "Approved";
+    action = "Approved";
+    verb = "Approve";
+  } else {
+    showError("You are not authorized to approve this document at this stage.");
+    return;
+  }
+
+  showConfirmDialog({
+    title: verb + " Document",
+    message: "Are you sure you want to " + verb.toLowerCase() + " this document?",
+    detail: "This will advance the document to: " + newStatus,
+    confirmLabel: "Yes, " + verb,
+    cancelLabel: "Cancel",
+    variant: "primary"
+  }).then(function (confirmed) {
+    if (confirmed) {
+      d.status = newStatus;
+      // update division routing if advancing from division → ARD
+      if (newStatus === "For ARD Clearance") {
+        d.division = "Office of the Regional Director";
+      }
+
+      // Update tracking
+      ensureTrail(d);
+
+      d.tracking.trail.push({
+        user: currentUser.name,
+        action: action,
+        timestamp: new Date().toISOString(),
+      });
+      d.tracking.lastUpdated = new Date().toISOString();
+      d.tracking.lastActor = currentUser.role;
+      d.tracking.updatedBy = currentUser.name;
+
+      showSuccess("Document " + action.toLowerCase() + " and advanced to: " + newStatus);
+
+      // Refresh view
+      viewDoc(ref);
+    }
+  });
 }
 function tlItem(done, label, time) {
   var weight = done ? "600" : "400";
@@ -5643,6 +6016,16 @@ function submitQuickSend() {
   d.status = "Sent to " + to;
   d.lastSentBy = currentUser.name;
   d.lastSentDate = formatDateISO(new Date());
+
+  ensureTrail(d);
+  d.tracking.trail.push({
+    user: currentUser.name,
+    action: "Sent to " + to,
+    timestamp: new Date().toISOString(),
+  });
+  d.tracking.lastUpdated = new Date().toISOString();
+  d.tracking.lastActor = currentUser.role;
+  d.tracking.updatedBy = currentUser.name;
 
   closeQuickSend();
   showSuccess(
@@ -5887,6 +6270,7 @@ function saveManualLogbook() {
   if (currentLogbookEditRef) {
     var d = getDocByRef(currentLogbookEditRef);
     if (!d) return;
+    var oldStatus = d.status;
     d.type = type;
     d.from = from;
     d.to = to;
@@ -5896,10 +6280,22 @@ function saveManualLogbook() {
     d.kind = kind;
     d.physicalCopy = physicalCopy;
     d.lastEditedBy = currentUser.name;
+
+    ensureTrail(d);
+    var editAction = (oldStatus !== status) ? ("Status changed to " + status) : "Edited details";
+    d.tracking.trail.push({
+      user: currentUser.name,
+      action: editAction,
+      timestamp: new Date().toISOString()
+    });
+    d.tracking.lastUpdated = new Date().toISOString();
+    d.tracking.lastActor = currentUser.role;
+    d.tracking.updatedBy = currentUser.name;
+
     closeManualLogbook();
     showSuccess("Logbook entry updated: " + currentLogbookEditRef);
   } else {
-    DOCS.unshift({
+    var newDoc = {
       ref: ref,
       type: type,
       from: from,
@@ -5911,7 +6307,32 @@ function saveManualLogbook() {
       kind: kind,
       physicalCopy: physicalCopy,
       division: currentUser.division || "ORD",
-    });
+      tracking: {
+        lastActor: currentUser.role,
+        lastUpdated: new Date().toISOString(),
+        trail: [
+          {
+            user: currentUser.name,
+            action: "Created",
+            timestamp: new Date().toISOString()
+          }
+        ]
+      }
+    };
+    if (status !== "For ARD Clearance") {
+      newDoc.tracking.trail.push({
+        user: currentUser.name,
+        action: "Status set to " + status,
+        timestamp: new Date().toISOString()
+      });
+    } else {
+      newDoc.tracking.trail.push({
+        user: "ORD",
+        action: "Received",
+        timestamp: new Date().toISOString()
+      });
+    }
+    DOCS.unshift(newDoc);
     closeManualLogbook();
     showSuccess("Manual logbook entry added with reference: " + ref);
   }
@@ -5946,13 +6367,13 @@ function setTab(el, t) {
 
 function filterDocsByTab(docs, tab) {
   if (tab === "all") return docs;
-  if (tab === "pending") return docs.filter(function(d) {
+  if (tab === "pending") return docs.filter(function (d) {
     return ["For ARD Clearance", "For RD Approval"].includes(d.status);
   });
-  if (tab === "approved") return docs.filter(function(d) {
+  if (tab === "approved") return docs.filter(function (d) {
     return d.status === "Approved";
   });
-  if (tab === "released") return docs.filter(function(d) {
+  if (tab === "released") return docs.filter(function (d) {
     return d.status === "Released";
   });
   return docs;
@@ -5960,14 +6381,14 @@ function filterDocsByTab(docs, tab) {
 
 function renderIncomingTable(tab) {
   var visibleDocs = getVisibleDocumentsForRole();
-  var docs = filterDocsByTab(visibleDocs.filter(function(d) { return d.kind === "incoming"; }), tab);
+  var docs = filterDocsByTab(visibleDocs.filter(function (d) { return d.kind === "incoming"; }), tab);
   var tbody = document.getElementById("incoming-tbody");
   if (!tbody) return;
   var h = "";
   if (docs.length === 0) {
     h = emptyStateRow(9, "📭", "No incoming documents", tab === "all" ? "Documents addressed to you will appear here." : "No documents match this filter.");
   } else {
-    docs.forEach(function(d) {
+    docs.forEach(function (d) {
       var conf = d.conf ? '<span class="pill pill-red" style="margin-left:4px">Conf.</span>' : "";
       var divFull = d.division || "";
       var divAbbrev = divFull ? getDivisionAbbrev(divFull) : "—";
@@ -5981,14 +6402,14 @@ function renderIncomingTable(tab) {
 
 function renderOutgoingTable(tab) {
   var visibleDocs = getVisibleDocumentsForRole();
-  var docs = filterDocsByTab(visibleDocs.filter(function(d) { return d.kind === "outgoing"; }), tab);
+  var docs = filterDocsByTab(visibleDocs.filter(function (d) { return d.kind === "outgoing"; }), tab);
   var tbody = document.getElementById("outgoing-tbody");
   if (!tbody) return;
   var h = "";
   if (docs.length === 0) {
     h = emptyStateRow(9, "📤", "No outgoing documents", tab === "all" ? "Documents you send will appear here." : "No documents match this filter.");
   } else {
-    docs.forEach(function(d) {
+    docs.forEach(function (d) {
       var conf = d.conf ? '<span class="pill pill-red" style="margin-left:4px">Conf.</span>' : "";
       var divFull = d.division || "";
       var divAbbrev = divFull ? getDivisionAbbrev(divFull) : "—";
@@ -6004,13 +6425,42 @@ function doSearch(v) {
   if (v.length > 1) {
     showPage("search");
     // Pre-fill the keyword after the page renders
-    setTimeout(function() {
+    setTimeout(function () {
       var el = document.getElementById("search-keyword");
       if (el) {
         el.value = v;
         executeSearch();
       }
     }, 50);
+  }
+}
+
+function handleSearchInput(value) {
+  var icon = document.getElementById("search-icon");
+  if (icon) {
+    if (value.length > 0) {
+      icon.style.display = "none";
+    } else {
+      icon.style.display = "flex";
+    }
+  }
+  // Call the original search function
+  doSearch(value);
+}
+
+function hideSearchIcon() {
+  var icon = document.getElementById("search-icon");
+  var input = document.getElementById("search-input");
+  if (icon && input && input.value.length > 0) {
+    icon.style.display = "none";
+  }
+}
+
+function showSearchIconIfEmpty() {
+  var icon = document.getElementById("search-icon");
+  var input = document.getElementById("search-input");
+  if (icon && input && input.value.length === 0) {
+    icon.style.display = "flex";
   }
 }
 function onRoleChange(v) {
@@ -6027,7 +6477,8 @@ document.addEventListener("click", function (e) {
     p &&
     p.classList.contains("open") &&
     !p.contains(e.target) &&
-    !e.target.closest(".icon-btn")
+    !e.target.closest(".icon-btn") &&
+    !e.target.closest(".topbar-nav-link")
   ) {
     p.classList.remove("open");
   }
@@ -6623,7 +7074,7 @@ function calculateDisposalDate(doc) {
 function updateDisposalSchedule() {
   var today = new Date();
   // Recalculate daysUntilDisposal live for all docs that have a disposalDate
-  DOCS.forEach(function(doc) {
+  DOCS.forEach(function (doc) {
     if (doc.disposalDate) {
       var disposal = new Date(doc.disposalDate);
       doc.daysUntilDisposal = Math.floor((disposal - today) / (1000 * 60 * 60 * 24));
@@ -6983,6 +7434,16 @@ function processDisposal(ref) {
       doc.disposalProcessedBy = currentUser.name;
       doc.status = "Disposed";
 
+      ensureTrail(doc);
+      doc.tracking.trail.push({
+        user: currentUser.name,
+        action: "Disposed",
+        timestamp: new Date().toISOString(),
+      });
+      doc.tracking.lastUpdated = new Date().toISOString();
+      doc.tracking.lastActor = currentUser.role;
+      doc.tracking.updatedBy = currentUser.name;
+
       showSuccess("Document " + ref + " marked for disposal");
       showPage("disposal");
     }
@@ -7114,56 +7575,72 @@ function renderEnhancedReports() {
   h += "</div>";
 
   // Dashboard Visualization Section - MOVED TO TOP
-  h +=
-    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(400px,1fr));gap:2rem;margin-bottom:2rem;">';
+  h += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(400px,1fr));gap:2rem;margin-bottom:2rem;">';
+
+  var firstRowVisible = false;
 
   // Document Status Chart
-  h +=
-    '<div style="background:#fff;border-radius:12px;padding:2rem;box-shadow:0 4px 20px rgba(0,0,0,0.08);border:1px solid var(--border);">';
-  h +=
-    '<h3 style="margin:0 0 1.5rem 0;color:var(--navy);font-size:1.3rem;font-weight:600;">📊 Document Status Overview</h3>';
-  h += '<div id="status-chart" style="height:300px;position:relative;">';
-  h += renderStatusChart();
-  h += "</div>";
-  h += "</div>";
+  if (dashboardPreferences.visibleWidgets.statusChart) {
+    firstRowVisible = true;
+    h += '<div style="background:#fff;border-radius:12px;padding:2rem;box-shadow:0 4px 20px rgba(0,0,0,0.08);border:1px solid var(--border);">';
+    h += '<h3 style="margin:0 0 1.5rem 0;color:var(--navy);font-size:1.3rem;font-weight:600;">📊 Document Status Overview</h3>';
+    h += '<div id="status-chart" style="height:300px;position:relative;">';
+    h += renderStatusChart();
+    h += '</div>';
+    h += '</div>';
+  }
 
   // Division Distribution Chart
-  h +=
-    '<div style="background:#fff;border-radius:12px;padding:2rem;box-shadow:0 4px 20px rgba(0,0,0,0.08);border:1px solid var(--border);">';
-  h +=
-    '<h3 style="margin:0 0 1.5rem 0;color:var(--navy);font-size:1.3rem;font-weight:600;">📁 Division Distribution</h3>';
-  h += '<div id="division-chart" style="height:300px;position:relative;">';
-  h += renderDivisionChart();
-  h += "</div>";
-  h += "</div>";
+  if (dashboardPreferences.visibleWidgets.divisionChart) {
+    firstRowVisible = true;
+    h += '<div style="background:#fff;border-radius:12px;padding:2rem;box-shadow:0 4px 20px rgba(0,0,0,0.08);border:1px solid var(--border);">';
+    h += '<h3 style="margin:0 0 1.5rem 0;color:var(--navy);font-size:1.3rem;font-weight:600;">📁 Division Distribution</h3>';
+    h += '<div id="division-chart" style="height:300px;position:relative;">';
+    h += renderDivisionChart();
+    h += '</div>';
+    h += '</div>';
+  }
 
-  h += "</div>";
+  h += '</div>';
 
   // Second Row of Charts
-  h +=
-    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(400px,1fr));gap:2rem;margin-bottom:2rem;">';
+  h += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(400px,1fr));gap:2rem;margin-bottom:2rem;">';
+
+  var secondRowVisible = false;
 
   // Document Type Breakdown
-  h +=
-    '<div style="background:#fff;border-radius:12px;padding:2rem;box-shadow:0 4px 20px rgba(0,0,0,0.08);border:1px solid var(--border);">';
-  h +=
-    '<h3 style="margin:0 0 1.5rem 0;color:var(--navy);font-size:1.3rem;font-weight:600;">📋 Document Types</h3>';
-  h += '<div id="type-chart" style="height:300px;position:relative;">';
-  h += renderTypeChart();
-  h += "</div>";
-  h += "</div>";
+  if (dashboardPreferences.visibleWidgets.typeChart) {
+    secondRowVisible = true;
+    h += '<div style="background:#fff;border-radius:12px;padding:2rem;box-shadow:0 4px 20px rgba(0,0,0,0.08);border:1px solid var(--border);">';
+    h += '<h3 style="margin:0 0 1.5rem 0;color:var(--navy);font-size:1.3rem;font-weight:600;">📋 Document Types</h3>';
+    h += '<div id="type-chart" style="height:300px;position:relative;">';
+    h += renderTypeChart();
+    h += '</div>';
+    h += '</div>';
+  }
 
   // Monthly Trend Chart
-  h +=
-    '<div style="background:#fff;border-radius:12px;padding:2rem;box-shadow:0 4px 20px rgba(0,0,0,0.08);border:1px solid var(--border);">';
-  h +=
-    '<h3 style="margin:0 0 1.5rem 0;color:var(--navy);font-size:1.3rem;font-weight:600;">📈 Monthly Trend</h3>';
-  h += '<div id="trend-chart" style="height:300px;position:relative;">';
-  h += renderTrendChart();
-  h += "</div>";
-  h += "</div>";
+  if (dashboardPreferences.visibleWidgets.trendChart) {
+    secondRowVisible = true;
+    h += '<div style="background:#fff;border-radius:12px;padding:2rem;box-shadow:0 4px 20px rgba(0,0,0,0.08);border:1px solid var(--border);">';
+    h += '<h3 style="margin:0 0 1.5rem 0;color:var(--navy);font-size:1.3rem;font-weight:600;">📈 Monthly Trend</h3>';
+    h += '<div id="trend-chart" style="height:300px;position:relative;">';
+    h += renderTrendChart();
+    h += '</div>';
+    h += '</div>';
+  }
 
-  h += "</div>";
+  h += '</div>';
+
+  // Show message if no charts are visible
+  if (!firstRowVisible && !secondRowVisible) {
+    h += '<div style="background:#fff;border-radius:12px;padding:3rem 2rem;text-align:center;box-shadow:0 4px 20px rgba(0,0,0,0.08);border:1px solid var(--border);margin-bottom:2rem;">';
+    h += '<div style="font-size:3rem;margin-bottom:1rem;opacity:0.5;">📊</div>';
+    h += '<h3 style="color:var(--muted);margin:0 0 0.5rem 0;">No Charts Visible</h3>';
+    h += '<p style="color:var(--muted);margin:0 0 1rem 0;">All dashboard widgets are currently hidden.</p>';
+    h += '<button onclick="openCustomizationModal()" class="btn-send" style="padding:0.75rem 2rem;">⚙️ Customize Dashboard</button>';
+    h += '</div>';
+  }
 
   // Reports Dashboard Configuration Section - MOVED TO MIDDLE
   h +=
@@ -7623,60 +8100,131 @@ function previewReport() {
   showSuccess("Report preview opened in new window");
 }
 
+// Dashboard customization preferences
+var dashboardPreferences = {
+  visibleWidgets: {
+    statusChart: true,
+    divisionChart: true,
+    typeChart: true,
+    trendChart: true
+  },
+  chartTypes: {
+    statusChart: 'bar',
+    divisionChart: 'donut',
+    typeChart: 'bar',
+    trendChart: 'line'
+  },
+  dateRange: 30 // days
+};
+
 function openCustomizationModal() {
-  // Create customization modal
-  var modalHTML = `
-    <div class="modal-overlay" id="customization-modal" onclick="closeCustomizationModal(event)">
-      <div class="modal" style="max-width:600px;" onclick="event.stopPropagation()">
-        <div class="modal-head">
-          <h3>⚙️ Customize Report</h3>
-          <span class="modal-close" onclick="closeCustomizationModal()">✕</span>
-        </div>
-        <div class="modal-body">
-          <div class="field">
-            <label>Report Title</label>
-            <input type="text" id="custom-title" placeholder="Enter custom report title" style="width:100%;">
-          </div>
-          <div class="field">
-            <label>Include Columns</label>
-            <div style="display:flex;flex-direction:column;gap:0.5rem;">
-              <label><input type="checkbox" checked> Reference No.</label>
-              <label><input type="checkbox" checked> Date</label>
-              <label><input type="checkbox" checked> Type</label>
-              <label><input type="checkbox" checked> From</label>
-              <label><input type="checkbox" checked> Subject</label>
-              <label><input type="checkbox" checked> To</label>
-              <label><input type="checkbox" checked> Status</label>
-              <label><input type="checkbox" checked> Division</label>
-            </div>
-          </div>
-          <div class="field">
-            <label>Sort By</label>
-            <select style="width:100%;">
-              <option>Date (Newest First)</option>
-              <option>Date (Oldest First)</option>
-              <option>Reference No.</option>
-              <option>Status</option>
-              <option>Division</option>
-            </select>
-          </div>
-          <div class="field">
-            <label>Group By</label>
-            <select style="width:100%;">
-              <option>None</option>
-              <option>Division</option>
-              <option>Status</option>
-              <option>Document Type</option>
-            </select>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn-sec" onclick="closeCustomizationModal()">Cancel</button>
-          <button class="btn-send" onclick="applyCustomization()">Apply Customization</button>
-        </div>
-      </div>
-    </div>
-  `;
+  // Create customization modal with dashboard widget options
+  var modalHTML = '<div class="modal-overlay" id="customization-modal" onclick="closeCustomizationModal(event)">';
+  modalHTML += '<div class="modal" style="max-width:650px;" onclick="event.stopPropagation();">';
+  modalHTML += '<div class="modal-head">';
+  modalHTML += '<h3>⚙️ Customize Dashboard</h3>';
+  modalHTML += '<span class="modal-close" onclick="closeCustomizationModal()">✕</span>';
+  modalHTML += '</div>';
+  modalHTML += '<div class="modal-body" style="max-height:500px;overflow-y:auto;">';
+
+  // Visible Widgets Section
+  modalHTML += '<div style="margin-bottom:1.5rem;">';
+  modalHTML += '<label style="font-weight:600;font-size:14px;color:var(--navy);display:block;margin-bottom:0.75rem;">📊 VISIBLE WIDGETS</label>';
+  modalHTML += '<div style="background:var(--pill);padding:1rem;border-radius:8px;display:flex;flex-direction:column;gap:0.75rem;">';
+
+  modalHTML += '<label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;padding:0.5rem;">';
+  modalHTML += '<input type="checkbox" id="widget-status" ' + (dashboardPreferences.visibleWidgets.statusChart ? 'checked' : '') + ' style="cursor:pointer;width:18px;height:18px;">';
+  modalHTML += '<span style="flex:1;font-size:14px;">Document Status Overview</span>';
+  modalHTML += '</label>';
+
+  modalHTML += '<label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;padding:0.5rem;">';
+  modalHTML += '<input type="checkbox" id="widget-division" ' + (dashboardPreferences.visibleWidgets.divisionChart ? 'checked' : '') + ' style="cursor:pointer;width:18px;height:18px;">';
+  modalHTML += '<span style="flex:1;font-size:14px;">Division Distribution</span>';
+  modalHTML += '</label>';
+
+  modalHTML += '<label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;padding:0.5rem;">';
+  modalHTML += '<input type="checkbox" id="widget-type" ' + (dashboardPreferences.visibleWidgets.typeChart ? 'checked' : '') + ' style="cursor:pointer;width:18px;height:18px;">';
+  modalHTML += '<span style="flex:1;font-size:14px;">Document Types</span>';
+  modalHTML += '</label>';
+
+  modalHTML += '<label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;padding:0.5rem;">';
+  modalHTML += '<input type="checkbox" id="widget-trend" ' + (dashboardPreferences.visibleWidgets.trendChart ? 'checked' : '') + ' style="cursor:pointer;width:18px;height:18px;">';
+  modalHTML += '<span style="flex:1;font-size:14px;">Monthly Trend</span>';
+  modalHTML += '</label>';
+
+  modalHTML += '</div></div>';
+
+  // Chart Types Section
+  modalHTML += '<div style="margin-bottom:1.5rem;">';
+  modalHTML += '<label style="font-weight:600;font-size:14px;color:var(--navy);display:block;margin-bottom:0.75rem;">🎨 CHART STYLE PREFERENCES</label>';
+  modalHTML += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">';
+
+  modalHTML += '<div>';
+  modalHTML += '<label style="display:block;font-size:12px;color:var(--muted);margin-bottom:0.4rem;">Status Overview</label>';
+  modalHTML += '<select id="chart-type-status" style="width:100%;padding:0.6rem;border:1.5px solid var(--border);border-radius:6px;font-size:13px;">';
+  modalHTML += '<option value="bar" ' + (dashboardPreferences.chartTypes.statusChart === 'bar' ? 'selected' : '') + '>Horizontal Bar Chart</option>';
+  modalHTML += '<option value="vertical" ' + (dashboardPreferences.chartTypes.statusChart === 'vertical' ? 'selected' : '') + '>Vertical Bar Chart</option>';
+  modalHTML += '</select>';
+  modalHTML += '</div>';
+
+  modalHTML += '<div>';
+  modalHTML += '<label style="display:block;font-size:12px;color:var(--muted);margin-bottom:0.4rem;">Division Distribution</label>';
+  modalHTML += '<select id="chart-type-division" style="width:100%;padding:0.6rem;border:1.5px solid var(--border);border-radius:6px;font-size:13px;">';
+  modalHTML += '<option value="donut" ' + (dashboardPreferences.chartTypes.divisionChart === 'donut' ? 'selected' : '') + '>Donut Chart</option>';
+  modalHTML += '<option value="bar" ' + (dashboardPreferences.chartTypes.divisionChart === 'bar' ? 'selected' : '') + '>Bar Chart</option>';
+  modalHTML += '</select>';
+  modalHTML += '</div>';
+
+  modalHTML += '<div>';
+  modalHTML += '<label style="display:block;font-size:12px;color:var(--muted);margin-bottom:0.4rem;">Document Types</label>';
+  modalHTML += '<select id="chart-type-type" style="width:100%;padding:0.6rem;border:1.5px solid var(--border);border-radius:6px;font-size:13px;">';
+  modalHTML += '<option value="bar" ' + (dashboardPreferences.chartTypes.typeChart === 'bar' ? 'selected' : '') + '>Bar Chart</option>';
+  modalHTML += '<option value="donut" ' + (dashboardPreferences.chartTypes.typeChart === 'donut' ? 'selected' : '') + '>Donut Chart</option>';
+  modalHTML += '</select>';
+  modalHTML += '</div>';
+
+  modalHTML += '<div>';
+  modalHTML += '<label style="display:block;font-size:12px;color:var(--muted);margin-bottom:0.4rem;">Monthly Trend</label>';
+  modalHTML += '<select id="chart-type-trend" style="width:100%;padding:0.6rem;border:1.5px solid var(--border);border-radius:6px;font-size:13px;">';
+  modalHTML += '<option value="line" ' + (dashboardPreferences.chartTypes.trendChart === 'line' ? 'selected' : '') + '>Line Chart</option>';
+  modalHTML += '<option value="bar" ' + (dashboardPreferences.chartTypes.trendChart === 'bar' ? 'selected' : '') + '>Bar Chart</option>';
+  modalHTML += '</select>';
+  modalHTML += '</div>';
+
+  modalHTML += '</div></div>';
+
+  // Date Range Section
+  modalHTML += '<div style="margin-bottom:1rem;">';
+  modalHTML += '<label style="font-weight:600;font-size:14px;color:var(--navy);display:block;margin-bottom:0.75rem;">📅 DEFAULT DATE RANGE</label>';
+  modalHTML += '<div style="background:var(--pill);padding:1rem;border-radius:8px;display:flex;flex-direction:column;gap:0.6rem;">';
+
+  modalHTML += '<label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;">';
+  modalHTML += '<input type="radio" name="date-range" value="7" ' + (dashboardPreferences.dateRange === 7 ? 'checked' : '') + ' style="cursor:pointer;">';
+  modalHTML += '<span style="font-size:14px;">Last 7 days</span>';
+  modalHTML += '</label>';
+
+  modalHTML += '<label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;">';
+  modalHTML += '<input type="radio" name="date-range" value="30" ' + (dashboardPreferences.dateRange === 30 ? 'checked' : '') + ' style="cursor:pointer;">';
+  modalHTML += '<span style="font-size:14px;">Last 30 days</span>';
+  modalHTML += '</label>';
+
+  modalHTML += '<label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;">';
+  modalHTML += '<input type="radio" name="date-range" value="90" ' + (dashboardPreferences.dateRange === 90 ? 'checked' : '') + ' style="cursor:pointer;">';
+  modalHTML += '<span style="font-size:14px;">Last 90 days</span>';
+  modalHTML += '</label>';
+
+  modalHTML += '</div></div>';
+
+  modalHTML += '</div>';
+  modalHTML += '<div class="modal-footer" style="display:flex;gap:0.75rem;justify-content:space-between;">';
+  modalHTML += '<button class="btn-sec" onclick="resetDashboardPreferences()" style="margin-right:auto;">Reset to Default</button>';
+  modalHTML += '<div style="display:flex;gap:0.75rem;">';
+  modalHTML += '<button class="btn-sec" onclick="closeCustomizationModal()">Cancel</button>';
+  modalHTML += '<button class="btn-send" onclick="applyCustomization()">Save Changes</button>';
+  modalHTML += '</div>';
+  modalHTML += '</div>';
+  modalHTML += '</div>';
+  modalHTML += '</div>';
 
   document.body.insertAdjacentHTML("beforeend", modalHTML);
 }
@@ -7691,14 +8239,52 @@ function closeCustomizationModal(event) {
 }
 
 function applyCustomization() {
-  var customTitle = document.getElementById("custom-title").value;
-  if (customTitle) {
-    // Apply custom title
-    console.log("Custom title applied:", customTitle);
+  // Save visible widgets preferences
+  dashboardPreferences.visibleWidgets.statusChart = document.getElementById("widget-status").checked;
+  dashboardPreferences.visibleWidgets.divisionChart = document.getElementById("widget-division").checked;
+  dashboardPreferences.visibleWidgets.typeChart = document.getElementById("widget-type").checked;
+  dashboardPreferences.visibleWidgets.trendChart = document.getElementById("widget-trend").checked;
+
+  // Save chart type preferences
+  dashboardPreferences.chartTypes.statusChart = document.getElementById("chart-type-status").value;
+  dashboardPreferences.chartTypes.divisionChart = document.getElementById("chart-type-division").value;
+  dashboardPreferences.chartTypes.typeChart = document.getElementById("chart-type-type").value;
+  dashboardPreferences.chartTypes.trendChart = document.getElementById("chart-type-trend").value;
+
+  // Save date range preference
+  var selectedRange = document.querySelector('input[name="date-range"]:checked');
+  if (selectedRange) {
+    dashboardPreferences.dateRange = parseInt(selectedRange.value);
   }
 
   closeCustomizationModal();
-  showSuccess("Customization applied successfully");
+
+  // Refresh the dashboard with new preferences
+  showSuccess("Dashboard customization applied successfully!");
+  showPage("enhanced-reports");
+}
+
+function resetDashboardPreferences() {
+  // Reset to defaults
+  dashboardPreferences = {
+    visibleWidgets: {
+      statusChart: true,
+      divisionChart: true,
+      typeChart: true,
+      trendChart: true
+    },
+    chartTypes: {
+      statusChart: 'bar',
+      divisionChart: 'donut',
+      typeChart: 'bar',
+      trendChart: 'line'
+    },
+    dateRange: 30
+  };
+
+  closeCustomizationModal();
+  showSuccess("Dashboard preferences reset to default");
+  showPage("enhanced-reports");
 }
 
 function resetReportFilters() {
@@ -7741,179 +8327,203 @@ function formatDateISO(date) {
 function renderStatusChart() {
   var statusData = getStatusData();
   var total = statusData.reduce((sum, item) => sum + item.value, 0);
-  var h =
-    '<div style="display:flex;align-items:center;justify-content:center;height:100%;gap:2rem;">';
+  var chartType = dashboardPreferences.chartTypes.statusChart;
 
-  // Create a simple bar chart
-  h += '<div style="display:flex;flex-direction:column;gap:1rem;width:100%;">';
-  statusData.forEach(function (item) {
-    var percentage = total > 0 ? (item.value / total) * 100 : 0;
-    var barWidth = percentage;
-    h += '<div style="display:flex;align-items:center;gap:1rem;">';
-    h +=
-      '<div style="width:80px;font-size:0.9rem;font-weight:500;">' +
-      item.label +
-      "</div>";
-    h +=
-      '<div style="flex:1;background:var(--pill);border-radius:4px;height:24px;position:relative;overflow:hidden;">';
-    h +=
-      '<div style="width:' +
-      barWidth +
-      "%;height:100%;background:" +
-      item.color +
-      ';transition:width 1s ease;"></div>';
-    h += "</div>";
-    h +=
-      '<div style="width:40px;text-align:right;font-weight:600;">' +
-      item.value +
-      "</div>";
-    h += "</div>";
-  });
-  h += "</div>";
+  var h = '<div style="display:flex;align-items:center;justify-content:center;height:100%;gap:2rem;">';
 
-  h += "</div>";
+  if (chartType === 'vertical') {
+    // Vertical bar chart
+    h += '<div style="display:flex;align-items:flex-end;justify-content:space-around;width:100%;height:250px;gap:1rem;padding:1rem 0;">';
+    statusData.forEach(function (item) {
+      var percentage = total > 0 ? (item.value / total) * 100 : 0;
+      var barHeight = (percentage / 100) * 200; // Max 200px height
+      h += '<div style="display:flex;flex-direction:column;align-items:center;flex:1;">';
+      h += '<div style="font-weight:600;font-size:1.2rem;margin-bottom:0.5rem;">' + item.value + '</div>';
+      h += '<div style="width:100%;background:' + item.color + ';border-radius:8px 8px 0 0;transition:height 1s ease;height:' + barHeight + 'px;"></div>';
+      h += '<div style="font-size:0.85rem;font-weight:500;margin-top:0.5rem;text-align:center;">' + item.label + '</div>';
+      h += '</div>';
+    });
+    h += '</div>';
+  } else {
+    // Horizontal bar chart (default)
+    h += '<div style="display:flex;flex-direction:column;gap:1rem;width:100%;">';
+    statusData.forEach(function (item) {
+      var percentage = total > 0 ? (item.value / total) * 100 : 0;
+      var barWidth = percentage;
+      h += '<div style="display:flex;align-items:center;gap:1rem;">';
+      h += '<div style="width:100px;font-size:0.9rem;font-weight:500;">' + item.label + '</div>';
+      h += '<div style="flex:1;background:var(--pill);border-radius:4px;height:24px;position:relative;overflow:hidden;">';
+      h += '<div style="width:' + barWidth + '%;height:100%;background:' + item.color + ';transition:width 1s ease;"></div>';
+      h += '</div>';
+      h += '<div style="width:40px;text-align:right;font-weight:600;">' + item.value + '</div>';
+      h += '</div>';
+    });
+    h += '</div>';
+  }
+
+  h += '</div>';
   return h;
 }
 
 function renderDivisionChart() {
   var divisionData = getDivisionData();
   var total = divisionData.reduce((sum, item) => sum + item.value, 0);
-  var h =
-    '<div style="display:flex;align-items:center;justify-content:center;height:100%;">';
+  var chartType = dashboardPreferences.chartTypes.divisionChart;
 
-  // Create a simple pie chart representation
-  h +=
-    '<div style="width:200px;height:200px;border-radius:50%;background:conic-gradient(';
-  var accumulated = 0;
-  divisionData.forEach(function (item, index) {
-    var percentage = total > 0 ? (item.value / total) * 100 : 0;
-    if (index > 0) h += ", ";
-    h +=
-      item.color + " " + accumulated + "% " + (accumulated + percentage) + "%";
-    accumulated += percentage;
-  });
-  h += ');position:relative;">';
-  h +=
-    '<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;border-radius:50%;width:120px;height:120px;display:flex;align-items:center;justify-content:center;flex-direction:column;">';
-  h +=
-    '<div style="font-size:1.5rem;font-weight:600;color:var(--navy);">' +
-    total +
-    "</div>";
-  h += '<div style="font-size:0.8rem;color:var(--muted);">Total</div>';
-  h += "</div>";
-  h += "</div>";
+  var h = '<div style="display:flex;align-items:center;justify-content:center;height:100%;">';
 
-  // Legend
-  h += '<div style="margin-left:2rem;">';
-  divisionData.forEach(function (item) {
-    h +=
-      '<div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem;">';
-    h +=
-      '<div style="width:12px;height:12px;border-radius:2px;background:' +
-      item.color +
-      ';"></div>';
-    h +=
-      '<span style="font-size:0.9rem;">' +
-      item.label +
-      " (" +
-      item.value +
-      ")</span>";
-    h += "</div>";
-  });
-  h += "</div>";
+  if (chartType === 'bar') {
+    // Bar chart view
+    h += '<div style="display:flex;flex-direction:column;gap:1rem;width:100%;">';
+    divisionData.forEach(function (item) {
+      var percentage = total > 0 ? (item.value / total) * 100 : 0;
+      h += '<div style="display:flex;align-items:center;gap:1rem;">';
+      h += '<div style="width:50px;font-size:0.85rem;font-weight:500;">' + item.label + '</div>';
+      h += '<div style="flex:1;background:var(--pill);border-radius:4px;height:22px;position:relative;overflow:hidden;">';
+      h += '<div style="width:' + percentage + '%;height:100%;background:' + item.color + ';transition:width 1s ease;"></div>';
+      h += '</div>';
+      h += '<div style="width:35px;text-align:right;font-weight:600;font-size:0.9rem;">' + item.value + '</div>';
+      h += '</div>';
+    });
+    h += '</div>';
+  } else {
+    // Donut chart view (default)
+    h += '<div style="width:200px;height:200px;border-radius:50%;background:conic-gradient(';
+    var accumulated = 0;
+    divisionData.forEach(function (item, index) {
+      var percentage = total > 0 ? (item.value / total) * 100 : 0;
+      if (index > 0) h += ", ";
+      h += item.color + " " + accumulated + "% " + (accumulated + percentage) + "%";
+      accumulated += percentage;
+    });
+    h += ');position:relative;">';
+    h += '<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;border-radius:50%;width:120px;height:120px;display:flex;align-items:center;justify-content:center;flex-direction:column;">';
+    h += '<div style="font-size:1.5rem;font-weight:600;color:var(--navy);">' + total + '</div>';
+    h += '<div style="font-size:0.8rem;color:var(--muted);">Total</div>';
+    h += '</div>';
+    h += '</div>';
 
-  h += "</div>";
+    // Legend
+    h += '<div style="margin-left:2rem;">';
+    divisionData.forEach(function (item) {
+      h += '<div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem;">';
+      h += '<div style="width:12px;height:12px;border-radius:2px;background:' + item.color + ';"></div>';
+      h += '<span style="font-size:0.9rem;">' + item.label + " (" + item.value + ")</span>";
+      h += '</div>';
+    });
+    h += '</div>';
+  }
+
+  h += '</div>';
   return h;
 }
 
 function renderTypeChart() {
   var typeData = getTypeData();
+  var total = typeData.reduce((sum, item) => sum + item.value, 0);
   var max = Math.max(...typeData.map((item) => item.value));
-  var h =
-    '<div style="display:flex;align-items:center;justify-content:center;height:100%;width:100%;">';
+  var chartType = dashboardPreferences.chartTypes.typeChart;
 
-  // Create horizontal bar chart
-  h += '<div style="width:100%;display:flex;flex-direction:column;gap:1rem;">';
-  typeData.forEach(function (item) {
-    var barWidth = max > 0 ? (item.value / max) * 100 : 0;
-    h += '<div style="display:flex;align-items:center;gap:1rem;">';
-    h +=
-      '<div style="width:100px;font-size:0.9rem;font-weight:500;">' +
-      item.label +
-      "</div>";
-    h +=
-      '<div style="flex:1;background:var(--pill);border-radius:4px;height:20px;position:relative;">';
-    h +=
-      '<div style="width:' +
-      barWidth +
-      "%;height:100%;background:" +
-      item.color +
-      ';transition:width 1s ease;"></div>';
-    h += "</div>";
-    h +=
-      '<div style="width:30px;text-align:right;font-weight:600;">' +
-      item.value +
-      "</div>";
-    h += "</div>";
-  });
-  h += "</div>";
+  var h = '<div style="display:flex;align-items:center;justify-content:center;height:100%;width:100%;">';
 
-  h += "</div>";
+  if (chartType === 'donut') {
+    // Donut chart view
+    h += '<div style="width:200px;height:200px;border-radius:50%;background:conic-gradient(';
+    var accumulated = 0;
+    typeData.forEach(function (item, index) {
+      var percentage = total > 0 ? (item.value / total) * 100 : 0;
+      if (index > 0) h += ", ";
+      h += item.color + " " + accumulated + "% " + (accumulated + percentage) + "%";
+      accumulated += percentage;
+    });
+    h += ');position:relative;">';
+    h += '<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;border-radius:50%;width:120px;height:120px;display:flex;align-items:center;justify-content:center;flex-direction:column;">';
+    h += '<div style="font-size:1.5rem;font-weight:600;color:var(--navy);">' + total + '</div>';
+    h += '<div style="font-size:0.8rem;color:var(--muted);">Types</div>';
+    h += '</div>';
+    h += '</div>';
+
+    // Legend
+    h += '<div style="margin-left:2rem;">';
+    typeData.forEach(function (item) {
+      h += '<div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem;">';
+      h += '<div style="width:12px;height:12px;border-radius:2px;background:' + item.color + ';"></div>';
+      h += '<span style="font-size:0.9rem;">' + item.label + " (" + item.value + ")</span>";
+      h += '</div>';
+    });
+    h += '</div>';
+  } else {
+    // Bar chart view (default)
+    h += '<div style="width:100%;display:flex;flex-direction:column;gap:1rem;">';
+    typeData.forEach(function (item) {
+      var barWidth = max > 0 ? (item.value / max) * 100 : 0;
+      h += '<div style="display:flex;align-items:center;gap:1rem;">';
+      h += '<div style="width:100px;font-size:0.9rem;font-weight:500;">' + item.label + '</div>';
+      h += '<div style="flex:1;background:var(--pill);border-radius:4px;height:20px;position:relative;">';
+      h += '<div style="width:' + barWidth + '%;height:100%;background:' + item.color + ';transition:width 1s ease;"></div>';
+      h += '</div>';
+      h += '<div style="width:30px;text-align:right;font-weight:600;">' + item.value + '</div>';
+      h += '</div>';
+    });
+    h += '</div>';
+  }
+
+  h += '</div>';
   return h;
 }
 
 function renderTrendChart() {
   var trendData = getTrendData();
   var max = Math.max(...trendData.map((item) => item.value));
-  var h =
-    '<div style="display:flex;align-items:center;justify-content:center;height:100%;width:100%;">';
+  var chartType = dashboardPreferences.chartTypes.trendChart;
 
-  // Create line chart
-  h += '<div style="width:100%;height:200px;position:relative;">';
-  h += '<svg width="100%" height="100%" viewBox="0 0 400 200">';
+  var h = '<div style="display:flex;align-items:center;justify-content:center;height:100%;width:100%;">';
 
-  // Draw grid lines
-  for (var i = 0; i <= 4; i++) {
-    var y = (i / 4) * 180 + 10;
-    h +=
-      '<line x1="40" y1="' +
-      y +
-      '" x2="380" y2="' +
-      y +
-      '" stroke="#e5e7eb" stroke-width="1"/>';
-  }
+  if (chartType === 'bar') {
+    // Bar chart view
+    h += '<div style="display:flex;align-items:flex-end;justify-content:space-around;width:100%;height:200px;gap:0.5rem;padding:1rem 0;">';
+    trendData.forEach(function (item) {
+      var barHeight = max > 0 ? (item.value / max) * 160 : 0;
+      h += '<div style="display:flex;flex-direction:column;align-items:center;flex:1;min-width:40px;">';
+      h += '<div style="font-weight:600;font-size:0.9rem;margin-bottom:0.3rem;color:var(--navy);">' + item.value + '</div>';
+      h += '<div style="width:100%;max-width:50px;background:var(--navy);border-radius:4px 4px 0 0;transition:height 1s ease;height:' + barHeight + 'px;"></div>';
+      h += '<div style="font-size:0.75rem;font-weight:500;margin-top:0.3rem;text-align:center;">' + item.label + '</div>';
+      h += '</div>';
+    });
+    h += '</div>';
+  } else {
+    // Line chart view (default)
+    h += '<div style="width:100%;height:200px;position:relative;">';
+    h += '<svg width="100%" height="100%" viewBox="0 0 400 200">';
 
-  // Draw line
-  var points = trendData
-    .map(function (item, index) {
+    // Draw grid lines
+    for (var i = 0; i <= 4; i++) {
+      var y = (i / 4) * 180 + 10;
+      h += '<line x1="40" y1="' + y + '" x2="380" y2="' + y + '" stroke="#e5e7eb" stroke-width="1"/>';
+    }
+
+    // Draw line
+    var points = trendData.map(function (item, index) {
       var x = 40 + (index / (trendData.length - 1)) * 340;
       var y = 190 - (item.value / max) * 170;
       return x + "," + y;
-    })
-    .join(" ");
+    }).join(" ");
 
-  h +=
-    '<polyline points="' +
-    points +
-    '" fill="none" stroke="var(--navy)" stroke-width="3"/>';
+    h += '<polyline points="' + points + '" fill="none" stroke="var(--navy)" stroke-width="3"/>';
 
-  // Draw points
-  trendData.forEach(function (item, index) {
-    var x = 40 + (index / (trendData.length - 1)) * 340;
-    var y = 190 - (item.value / max) * 170;
-    h += '<circle cx="' + x + '" cy="' + y + '" r="4" fill="var(--navy)"/>';
-    h +=
-      '<text x="' +
-      x +
-      '" y="195" text-anchor="middle" font-size="10" fill="#666">' +
-      item.label +
-      "</text>";
-  });
+    // Draw points
+    trendData.forEach(function (item, index) {
+      var x = 40 + (index / (trendData.length - 1)) * 340;
+      var y = 190 - (item.value / max) * 170;
+      h += '<circle cx="' + x + '" cy="' + y + '" r="4" fill="var(--navy)"/>';
+      h += '<text x="' + x + '" y="195" text-anchor="middle" font-size="10" fill="#666">' + item.label + '</text>';
+    });
 
-  h += "</svg>";
-  h += "</div>";
+    h += '</svg>';
+    h += '</div>';
+  }
 
-  h += "</div>";
+  h += '</div>';
   return h;
 }
 
@@ -7947,6 +8557,12 @@ function getDivisionData() {
     "#ef4444",
     "#8b5cf6",
     "#ec4899",
+    "#14b8a6",
+    "#f97316",
+    "#6366f1",
+    "#84cc16",
+    "#06b6d4",
+    "#eab308",
   ];
   var data = [];
   var colorIndex = 0;
@@ -7972,9 +8588,9 @@ function getTypeData() {
   });
 
   var colors = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6"];
-  var sortedTypes = Object.keys(typeCounts).map(function(type) {
+  var sortedTypes = Object.keys(typeCounts).map(function (type) {
     return { label: type, value: typeCounts[type] };
-  }).sort(function(a, b) {
+  }).sort(function (a, b) {
     return b.value - a.value;
   });
 
@@ -7983,11 +8599,11 @@ function getTypeData() {
 
   if (sortedTypes.length > 5) {
     var top4 = sortedTypes.slice(0, 4);
-    var otherSum = sortedTypes.slice(4).reduce(function(sum, item) {
+    var otherSum = sortedTypes.slice(4).reduce(function (sum, item) {
       return sum + item.value;
     }, 0);
 
-    top4.forEach(function(item) {
+    top4.forEach(function (item) {
       data.push({
         label: item.label,
         value: item.value,
@@ -8002,7 +8618,7 @@ function getTypeData() {
       color: "#64748b"
     });
   } else {
-    sortedTypes.forEach(function(item) {
+    sortedTypes.forEach(function (item) {
       data.push({
         label: item.label,
         value: item.value,
@@ -8074,16 +8690,16 @@ function renderLatestAnnouncementsList() {
         : '';
 
       h += '<div class="ann-widget-item" onclick="viewAnnouncementDetail(' + ann.id + ')">' +
-             '<div style="display:flex;align-items:center;gap:0.5rem;">' +
-               '<span class="ann-widget-item-title">' + escapeHtml(ann.title) + '</span>' +
-               '<span class="pill ' + badgeClass + '">' + escapeHtml(ann.priority) + '</span>' +
-               pinHtml +
-             '</div>' +
-             '<div class="ann-widget-item-meta">' +
-               '<span>By ' + escapeHtml(ann.postedBy) + '</span>' +
-               '<span>' + escapeHtml(ann.datePosted) + '</span>' +
-             '</div>' +
-           '</div>';
+        '<div style="display:flex;align-items:center;gap:0.5rem;">' +
+        '<span class="ann-widget-item-title">' + escapeHtml(ann.title) + '</span>' +
+        '<span class="pill ' + badgeClass + '">' + escapeHtml(ann.priority) + '</span>' +
+        pinHtml +
+        '</div>' +
+        '<div class="ann-widget-item-meta">' +
+        '<span>By ' + escapeHtml(ann.postedBy) + '</span>' +
+        '<span>' + escapeHtml(ann.datePosted) + '</span>' +
+        '</div>' +
+        '</div>';
     });
     h += '</div>';
   }
@@ -8094,8 +8710,9 @@ function renderAnnouncementsPage() {
   var canCreate = ["admin", "rd", "ard", "oic", "dc"].includes(currentUser.role);
   var html = '';
   html += '<div class="page-toolbar" style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:0.75rem;align-items:center;margin-bottom:1rem;">';
-  html += '<div style="flex:1;max-width:50%;min-width:260px;">';
-  html += '<input id="announcement-page-search-input" placeholder="Search Announcements by title..." oninput="renderAnnouncementsPageList(this.value)" style="width:100%;padding:0.75rem 1rem;border:1.5px solid var(--border);border-radius:10px;background:#fff;color:var(--text);font-size:14px;outline:none;" />';
+  html += '<div style="flex:1;max-width:50%;min-width:260px;position:relative;">';
+  html += '<span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:14px;">🔍</span>';
+  html += '<input id="announcement-page-search-input" placeholder="Search Announcements by title..." oninput="renderAnnouncementsPageList(this.value)" style="width:100%;padding:0.75rem 1rem 0.75rem 2.5rem;border:1.5px solid var(--border);border-radius:10px;background:#fff;color:var(--text);font-size:14px;outline:none;" />';
   html += '</div>';
   html += '<div style="display:flex;gap:0.5rem;flex-wrap:wrap;justify-content:flex-end;">';
   if (canCreate) html += '<button class="btn-send" onclick="openCreateAnnouncementModal()">Create Announcement</button>';
@@ -8130,15 +8747,15 @@ function renderAnnouncementsPageList(query) {
       if (contentPreview.length > 80) contentPreview = contentPreview.substring(0, 80) + '...';
 
       h += '<div class="announcement-item" onclick="viewAnnouncementDetail(' + ann.id + ')">' +
-             '<div class="ann-item-header">' +
-               '<span class="ann-item-title">' + pin + escapeHtml(ann.title) + '</span>' +
-               '<span class="pill ' + badgeClass + '">' + escapeHtml(ann.priority) + '</span>' +
-             '</div>' +
-             '<div class="ann-item-meta">' +
-               '<span>By ' + escapeHtml(ann.postedBy) + '</span>' +
-               '<span>' + escapeHtml(ann.datePosted) + '</span>' +
-             '</div>' +
-           '</div>';
+        '<div class="ann-item-header">' +
+        '<span class="ann-item-title">' + pin + escapeHtml(ann.title) + '</span>' +
+        '<span class="pill ' + badgeClass + '">' + escapeHtml(ann.priority) + '</span>' +
+        '</div>' +
+        '<div class="ann-item-meta">' +
+        '<span>By ' + escapeHtml(ann.postedBy) + '</span>' +
+        '<span>' + escapeHtml(ann.datePosted) + '</span>' +
+        '</div>' +
+        '</div>';
     });
     h += '</div>';
   }
@@ -8153,7 +8770,7 @@ function openCreateAnnouncementModal() {
   document.getElementById("new-ann-priority").value = "Normal";
   document.getElementById("new-ann-expiry").value = "";
   document.getElementById("new-ann-pinned").checked = false;
-  
+
   document.getElementById("create-announcement-modal").classList.add("open");
   document.body.classList.add("modal-open");
 }
@@ -8169,7 +8786,7 @@ function publishAnnouncement() {
   var priority = document.getElementById("new-ann-priority").value;
   var expiry = document.getElementById("new-ann-expiry").value;
   var pinned = document.getElementById("new-ann-pinned").checked;
-  
+
   if (!title) {
     showError("Announcement Title is required.");
     return;
@@ -8178,12 +8795,12 @@ function publishAnnouncement() {
     showError("Announcement Content is required.");
     return;
   }
-  
+
   var postedBy = currentUser.roleLabel;
   if (currentUser.role === "admin") postedBy = "System Administrator";
-  
-  var newId = announcements.length > 0 ? Math.max.apply(null, announcements.map(function(o) { return o.id; })) + 1 : 1;
-  
+
+  var newId = announcements.length > 0 ? Math.max.apply(null, announcements.map(function (o) { return o.id; })) + 1 : 1;
+
   var newAnn = {
     id: newId,
     title: title,
@@ -8193,41 +8810,39 @@ function publishAnnouncement() {
     pinned: pinned,
     datePosted: formatDateISO(new Date())
   };
-  
+
   if (expiry) {
     newAnn.expiryDate = expiry;
   }
-  
+
   announcements.push(newAnn);
   showSuccess("Announcement published successfully.");
   closeCreateAnnouncementModal();
-  
-  // Refresh the dashboard if currently on it
-  if (currentPage === "dashboard") {
-    showPage("dashboard");
-  }
+
+  // Automatically navigate to announcements page to see the new widget
+  showPage("announcements");
 }
 
 
 function viewAnnouncementDetail(id) {
-  var ann = announcements.find(function(a) { return a.id === id; });
+  var ann = announcements.find(function (a) { return a.id === id; });
   if (!ann) return;
-  
+
   document.getElementById("detail-ann-title").textContent = ann.title;
   document.getElementById("detail-ann-content").textContent = ann.content;
   document.getElementById("detail-ann-date").textContent = "Posted on: " + ann.datePosted;
   document.getElementById("detail-ann-postedby").textContent = "By: " + ann.postedBy;
-  
+
   var badgeContainer = document.getElementById("detail-ann-priority-badge");
   var badgeClass = "pill-gray";
   if (ann.priority === "Urgent") badgeClass = "pill-red";
   else if (ann.priority === "Important") badgeClass = "pill-amber";
   else if (ann.priority === "Normal") badgeClass = "pill-blue";
   badgeContainer.innerHTML = '<span class="pill ' + badgeClass + '">' + escapeHtml(ann.priority) + '</span>';
-  
+
   var pinnedContainer = document.getElementById("detail-ann-pinned-status");
   pinnedContainer.textContent = ann.pinned ? "📌 Pinned Announcement" : "";
-  
+
   // Open the detail modal
   document.getElementById("announcement-detail-modal").classList.add("open");
   document.body.classList.add("modal-open");
@@ -8237,3 +8852,4 @@ function closeAnnouncementDetailModal() {
   document.getElementById("announcement-detail-modal").classList.remove("open");
   document.body.classList.remove("modal-open");
 }
+
